@@ -19,7 +19,7 @@ Dependencies: P0 contract/fixtures; spreadsheet not required for initial impleme
 
 Implement migrations, ownership constraints, account/settings CRUD, claims/receipts and reimbursement links, entries, statement revisions, settlements, plan lines, snapshots, month summaries, corrections, and audit history. Use transactions, source uniqueness, idempotency records, and optimistic concurrency. Keep database and HTTP concerns outside pure financial calculation functions.
 
-Gate: table-driven Go tests plus PostgreSQL integration tests prove all accounting scenarios below; malformed currency and cross-owner references are rejected; closed-month writes fail; duplicate concurrent accepts cannot create two postings.
+Gate: table-driven Go tests plus PostgreSQL integration tests prove all accounting scenarios below; malformed currency and cross-owner references are rejected; imported or review drafts can be saved for a closed month without affecting its totals, but accepting a draft or directly creating a posting in that month is rejected until reopen; duplicate concurrent accepts cannot create two postings. Tests must cover both saving an imported draft without changing closed-month totals and rejecting an accepted posting in a closed month.
 
 ## P2 — Browser monthly review
 
@@ -86,7 +86,8 @@ Gate: web and Android agree, tracked categories match the mapped spreadsheet con
 | Salary absent or income zero | Missing/zero distinguished; savings rate unavailable for zero income |
 | Missing card spending but known bill due | Provisional summary; payable still visible |
 | End of month near UTC boundary | Reporting month follows Asia/Singapore local event date |
-| Closed month receives an import | Draft only until reopen |
+| Closed month receives an import | Draft is saved; closed-month totals remain unchanged until reopen and acceptance |
+| Accept a draft or directly create a posting in a closed month | Rejected until reopen; no posting or change to closed-month totals |
 | Web and Android edit same revision | Stale update rejected; no lost update |
 | Unknown or foreign currency | Review/reject, no silent SGD summation |
 

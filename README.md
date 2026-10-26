@@ -8,4 +8,4 @@ The first hosted version will use **Render Free** for the Go API and React front
 
 Start with the [implementation handoff](docs/planning/README.md). It links the product requirements, accounting rules, architecture, automation design, deployment options, and phased work plan.
 
-Shared terminology lives in [GLOSSARY.md](GLOSSARY.md); architectural decisions live in [docs/adr](docs/adr/0001-platform-and-delivery.md). Repository agent instructions remain in [AGENTS.md](AGENTS.md).
+Shared terminology lives in [GLOSSARY.md](GLOSSARY.md); architectural decisions live in [docs/adr](docs/adr). Repository agent instructions remain in [AGENTS.md](AGENTS.md).

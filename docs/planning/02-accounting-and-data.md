@@ -25,7 +25,7 @@ Store event dates and due dates as ISO local dates, reporting month as the first
 | Envelope funding / return | 0 | 0 | 0 | Transfer crossing funding boundary; not consumption |
 | Matched reimbursement receipt | Negative personal-cost recovery once | 0 | 0 | Confirmed receipt; pending claim has no cash effect |
 
-A movement has one purpose: ordinary transfer, allocation, allocation withdrawal, or card settlement. It cannot create both a standalone expense and a statement payment. Withdrawal and refund caps require review when the original records are outside tracked history; do not invent missing historical events.
+A movement has exactly one purpose from this exhaustive set: income, direct expense, refund, reimbursement receipt, ordinary transfer, envelope funding, envelope return, allocation, allocation withdrawal, or card settlement. It cannot create both a standalone expense and a statement payment. Withdrawal and refund caps require review when the original records are outside tracked history; do not invent missing historical events.
 
 ## Statement semantics
 
@@ -118,7 +118,7 @@ Add entities:
 | Entity / extension | Required semantics |
 | --- | --- |
 | claims | Expected reimbursement amount, related expense/statement if known, expected receipt date, state, source evidence; outstanding amount derived from linked receipts and adjustments |
-| reimbursement_receipts | Cash entry kind linked to one or more claims; each receipt allocation bounded by received amount; never income kind salary |
+| reimbursement_receipts | Cash entry kind linked to one or more claims; each allocation must not exceed the claim's outstanding amount at allocation time, and the sum of allocations for a receipt must not exceed the amount received; never income kind salary |
 | expense_recoveries | Link confirmed reimbursement to personal-cost reduction exactly once; over-recovery requires review; unknown expense linkage remains unresolved |
 | reconciliation_periods | Joint worksheet date range, explicit reporting month, additions/deductions, remainder, contribution proposal, and evidence; no automatic cash posting |
 | legacy_month_summaries | Imported original formula result, source coordinates, completeness flags; read-only reconciliation data excluded from live sums |

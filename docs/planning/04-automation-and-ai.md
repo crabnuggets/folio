@@ -31,11 +31,12 @@ Start with manual summary entry and CSV, then one explicitly identified bank/tem
 - Password-protected statements require user-assisted unlocking initially. Do not guess password schemes, store national identity information, or retain passwords. Clear temporary plaintext files after processing.
 - Unsupported layout, scanned image, multiple currencies, missing pages, or inconsistent arithmetic → review/manual entry. OCR is a later local option with accuracy tests, not a guaranteed free hosted service.
 - Optional category breakdowns must sum to known statement spending. Retain an “unclassified” remainder. Breakdown rows annotate the statement; they are not additional expenses.
+- For manual PDFs, use `provider=manual_pdf` and the SHA-256 hash of the original uploaded bytes as both the stable `external_id` and content hash. Source identity is `(owner_id, provider, external_id)`, independent of filename, upload time, or parser version; enforce it with a database uniqueness constraint before acceptance. An unchanged re-upload reuses the source and pending draft, or links to its existing statement after acceptance, without another posting.
 - Duplicates across email, PDF, and CSV are matched by source and domain identity. Same card/cycle with different totals is a revision conflict, never a silent replacement.
 
 ## Draft contract and lifecycle
 
-States: received → parsing → needs_review → accepted/rejected; parsing can fail and be retried. A duplicate can link to an existing record and finish without posting. Only validated drafts enter acceptance.
+States: received → parsing → needs_review → accepted/rejected; parsing failures follow the durable job's bounded retry policy. When retries are exhausted and the parsing job enters dead-letter state, move its draft to needs_review with a redacted failure and actions to retry parsing or complete fields manually. An explicit retry returns the draft to parsing with a new bounded retry budget. A duplicate can link to an existing record and finish without posting. Only validated drafts enter acceptance.
 
 A candidate contains event kind, amount/currency, local date, reporting month, account/card reference, statement components where applicable, per-field evidence locations, parser/model version, validation errors, and duplicate candidates. Treat model confidence as advisory; it is not calibrated evidence of financial correctness.
 

@@ -32,7 +32,7 @@ SGD and Asia/Singapore are proposed defaults consistent with Singapore; the user
 
 ## Spreadsheet mapping procedure
 
-Initial structure and formulas are recorded in [the source mapping](08-spreadsheet-mapping.md). For implementation, reread current workbook/sheet names, relevant headers, formulas versus entered values, currencies, month attribution, opening balances, carryovers, and category meaning. Produce a table: source sheet/column → Folio entity/field → transform → unresolved ambiguity. Preserve a source row ID in migration data. Preview changes and duplicate candidates, compare at least three representative months including a refund or carryover where available, then export a reconciliation report. Never infer a historical transfer is an expense merely because it is negative in the workbook.
+Initial structure and formulas are recorded in [the source mapping](08-spreadsheet-mapping.md). For implementation, reread current workbook/sheet names, relevant headers, formulas versus entered values, currencies, month attribution, opening balances, carryovers, and category meaning. Produce a table: source sheet/column → Folio entity/field → transform → unresolved ambiguity. Preserve a source row ID in migration data. Preview changes and duplicate candidates, compare all four required months—April (joint adjustment), May (refund exclusion), September (claim exclusion), and October (incomplete month)—then export a reconciliation report. Never infer a historical transfer is an expense merely because it is negative in the workbook.
 
 ## Reference register
 
