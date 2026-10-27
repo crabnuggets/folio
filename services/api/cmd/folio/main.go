@@ -1,0 +1,61 @@
+package main
+
+import (
+	"context"
+	"errors"
+	"log/slog"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
+	"github.com/crabnuggets/folio/services/api/internal/auth"
+	"github.com/crabnuggets/folio/services/api/internal/config"
+	"github.com/crabnuggets/folio/services/api/internal/httpapi"
+	"github.com/crabnuggets/folio/services/api/internal/store"
+)
+
+func main() {
+	if err := run(); err != nil {
+		slog.Error("API stopped", "error", err.Error())
+		os.Exit(1)
+	}
+}
+func run() error {
+	cfg, err := config.Load()
+	if err != nil {
+		return err
+	}
+	middleware, err := auth.New(cfg.Auth)
+	if err != nil {
+		return err
+	}
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
+	startup, stopStartup := context.WithTimeout(ctx, 20*time.Second)
+	db, err := store.NewPostgres(startup, cfg.DatabaseURL)
+	stopStartup()
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	server := &http.Server{Addr: cfg.Address, Handler: httpapi.New(db, cfg.OwnerID, middleware), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 32 << 10}
+	result := make(chan error, 1)
+	go func() { slog.Info("API listening", "address", cfg.Address); result <- server.ListenAndServe() }()
+	select {
+	case err := <-result:
+		if !errors.Is(err, http.ErrServerClosed) {
+			return err
+		}
+		return nil
+	case <-ctx.Done():
+		shutdown, cancelShutdown := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancelShutdown()
+		if err := server.Shutdown(shutdown); err != nil {
+			_ = server.Close()
+			return errors.New("API shutdown deadline exceeded")
+		}
+		return nil
+	}
+}

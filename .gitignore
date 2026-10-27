@@ -31,3 +31,8 @@ go.work.sum
 # Editor/IDE
 # .idea/
 # .vscode/
+
+# Local backend build and Python contract tooling
+/services/api/folio
+.venv/
+__pycache__/

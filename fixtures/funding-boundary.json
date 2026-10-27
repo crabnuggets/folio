@@ -1,0 +1,232 @@
+{
+  "schema_version": 1,
+  "name": "funding-boundary-baseline",
+  "description": "Synthetic funding-boundary fixture. Envelope funding/return are not income or consumption. Pending claim adds no actual cash. Unmatched reimbursement keeps personal-cost coverage provisional.",
+  "month": "2026-10",
+  "currency": "SGD",
+  "accounts": [
+    {
+      "ref": "funding",
+      "input": {
+        "alias": "Funding",
+        "kind": "bank",
+        "currency": "SGD",
+        "active": true,
+        "include_in_liquid_cash": true,
+        "funding_boundary": [
+          {
+            "effective_month": "2026-01",
+            "included": true
+          }
+        ]
+      }
+    },
+    {
+      "ref": "envelope",
+      "input": {
+        "alias": "Envelope",
+        "kind": "bank",
+        "currency": "SGD",
+        "active": true,
+        "include_in_liquid_cash": true,
+        "funding_boundary": []
+      }
+    },
+    {
+      "ref": "card",
+      "input": {
+        "alias": "Card",
+        "kind": "credit_card",
+        "currency": "SGD",
+        "active": true,
+        "include_in_liquid_cash": false,
+        "funding_boundary": []
+      }
+    },
+    {
+      "ref": "house_savings",
+      "input": {
+        "alias": "House Savings",
+        "kind": "savings",
+        "currency": "SGD",
+        "active": true,
+        "include_in_liquid_cash": false,
+        "funding_boundary": []
+      }
+    },
+    {
+      "ref": "investments",
+      "input": {
+        "alias": "Investments",
+        "kind": "investment",
+        "currency": "SGD",
+        "active": true,
+        "include_in_liquid_cash": false,
+        "funding_boundary": []
+      }
+    }
+  ],
+  "entries": [
+    {
+      "ref": "salary",
+      "input": {
+        "kind": "income",
+        "amount_minor": "500000",
+        "currency": "SGD",
+        "effective_date": "2026-10-25",
+        "reporting_month": "2026-10",
+        "source_account_id": null,
+        "destination_account_id": "$funding",
+        "category": "salary"
+      }
+    },
+    {
+      "ref": "envelope_funding",
+      "input": {
+        "kind": "envelope_funding",
+        "amount_minor": "80000",
+        "currency": "SGD",
+        "effective_date": "2026-10-25",
+        "reporting_month": "2026-10",
+        "source_account_id": "$funding",
+        "destination_account_id": "$envelope",
+        "category": ""
+      }
+    },
+    {
+      "ref": "returned_excess",
+      "input": {
+        "kind": "envelope_return",
+        "amount_minor": "15000",
+        "currency": "SGD",
+        "effective_date": "2026-10-25",
+        "reporting_month": "2026-10",
+        "source_account_id": "$envelope",
+        "destination_account_id": "$funding",
+        "category": ""
+      }
+    },
+    {
+      "ref": "card_payment",
+      "input": {
+        "kind": "card_settlement",
+        "amount_minor": "100000",
+        "currency": "SGD",
+        "effective_date": "2026-10-25",
+        "reporting_month": "2026-10",
+        "source_account_id": "$funding",
+        "destination_account_id": "$card",
+        "category": ""
+      }
+    },
+    {
+      "ref": "house_savings_transfer",
+      "input": {
+        "kind": "allocation",
+        "amount_minor": "60000",
+        "currency": "SGD",
+        "effective_date": "2026-10-25",
+        "reporting_month": "2026-10",
+        "source_account_id": "$funding",
+        "destination_account_id": "$house_savings",
+        "category": ""
+      }
+    },
+    {
+      "ref": "investment_transfer",
+      "input": {
+        "kind": "allocation",
+        "amount_minor": "40000",
+        "currency": "SGD",
+        "effective_date": "2026-10-25",
+        "reporting_month": "2026-10",
+        "source_account_id": "$funding",
+        "destination_account_id": "$investments",
+        "category": ""
+      }
+    },
+    {
+      "ref": "family_allowance",
+      "input": {
+        "kind": "direct_expense",
+        "amount_minor": "20000",
+        "currency": "SGD",
+        "effective_date": "2026-10-25",
+        "reporting_month": "2026-10",
+        "source_account_id": "$funding",
+        "destination_account_id": null,
+        "category": "family_allowance"
+      }
+    },
+    {
+      "ref": "reimbursement",
+      "input": {
+        "kind": "reimbursement_receipt",
+        "amount_minor": "10000",
+        "currency": "SGD",
+        "effective_date": "2026-10-25",
+        "reporting_month": "2026-10",
+        "source_account_id": null,
+        "destination_account_id": "$funding",
+        "category": ""
+      }
+    }
+  ],
+  "statements": [
+    {
+      "ref": "statement",
+      "input": {
+        "account_id": "$card",
+        "currency": "SGD",
+        "cycle_start": "2026-09-01",
+        "cycle_end": "2026-09-30",
+        "issue_date": "2026-10-01",
+        "due_date": "2026-10-28",
+        "amount_due_minor": "100000",
+        "net_spending_minor": "100000",
+        "spending_evidence": "Synthetic bank-labeled net new cycle spending fixture"
+      }
+    }
+  ],
+  "settlements": [
+    {
+      "statement_ref": "statement",
+      "entry_ref": "card_payment",
+      "amount_minor": "100000"
+    }
+  ],
+  "claims": [
+    {
+      "ref": "pending_claim",
+      "input": {
+        "amount_minor": "30000",
+        "currency": "SGD",
+        "description": "Synthetic pending reimbursement; not received",
+        "state": "pending",
+        "expected_receipt_date": "2026-10-30"
+      }
+    }
+  ],
+  "checklist": {
+    "income_reviewed": true,
+    "cards_reviewed": true,
+    "expenses_reviewed": true,
+    "allocations_reviewed": true,
+    "no_statement_reasons": {}
+  },
+  "expected_summary": {
+    "income_minor": "500000",
+    "funding_inflows_minor": "525000",
+    "funding_outflows_minor": "300000",
+    "funding_remainder_minor": "225000",
+    "allocation_minor": "100000",
+    "gross_spending_minor": "120000",
+    "confirmed_recoveries_minor": "0",
+    "unmatched_claims_minor": "30000",
+    "unmatched_receipts_minor": "10000",
+    "is_provisional": true
+  },
+  "expected_remaining_payable": {
+    "statement": "0"
+  }
+}
