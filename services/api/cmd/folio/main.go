@@ -16,12 +16,17 @@ import (
 	"github.com/crabnuggets/folio/services/api/internal/store"
 )
 
+// main runs the API and exits with status 1 if startup, serving, or shutdown fails.
 func main() {
 	if err := run(); err != nil {
 		slog.Error("API stopped", "error", err.Error())
 		os.Exit(1)
 	}
 }
+// run validates configuration, opens and migrates PostgreSQL, and serves the API
+// until interrupted or terminated. It allows ten seconds to drain requests before
+// forcing closure. Configuration, authentication, storage, and serving errors
+// propagate; a failed shutdown returns a deadline error.
 func run() error {
 	cfg, err := config.Load()
 	if err != nil {

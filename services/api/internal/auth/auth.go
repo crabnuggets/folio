@@ -30,6 +30,12 @@ type verifier struct {
 	expiresAt, lastFetch time.Time
 }
 
+// New validates configuration and creates single-owner bearer authentication
+// middleware without fetching keys. Development tokens require development or test
+// mode and at least 32 bytes. JWT mode checks RS256/ES256 signatures, issuer, audience,
+// expiration, and time claims with ten seconds of leeway using issuer-pinned JWKS.
+// Invalid configuration returns an error. The middleware answers invalid tokens
+// and key-fetch failures with 401, and valid tokens for another subject with 403.
 func New(config Config) (func(http.Handler) http.Handler, error) {
 	if !domain.ValidID(config.OwnerID) {
 		return nil, errors.New("OWNER_ID must be a UUID")
@@ -98,6 +104,8 @@ func New(config Config) (func(http.Handler) http.Handler, error) {
 		})
 	}, nil
 }
+// writeError sends an uncached authentication error with a bearer challenge and
+// request ID, generating an ID when absent. Response encoding errors are ignored.
 func writeError(w http.ResponseWriter, status int, code, message string) {
 	requestID := w.Header().Get("X-Request-ID")
 	if requestID == "" {
@@ -110,6 +118,9 @@ func writeError(w http.ResponseWriter, status int, code, message string) {
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(map[string]any{"error": map[string]any{"code": code, "message": message, "fields": map[string]string{}, "request_id": requestID}})
 }
+// key resolves a token's kid to a compatible cached RSA or EC public key, refreshing
+// expired or unknown keys at most once per minute. Missing, unavailable, unknown,
+// or incompatible keys and unsupported methods return errors; refresh errors propagate.
 func (v *verifier) key(token *jwt.Token) (any, error) {
 	kid, ok := token.Header["kid"].(string)
 	if !ok || kid == "" || len(kid) > 200 {
@@ -146,6 +157,10 @@ func (v *verifier) key(token *jwt.Token) (any, error) {
 	}
 	return value, nil
 }
+// refresh replaces signing keys from the configured JWKS endpoint for one hour.
+// The caller must hold v.mu. Unsupported or malformed individual keys are skipped;
+// fetch failures, invalid documents, duplicate accepted key IDs, or no usable keys
+// return redacted errors and leave the existing cache unchanged.
 func (v *verifier) refresh() error {
 	response, err := v.client.Get(v.config.JWKSURL)
 	if err != nil {

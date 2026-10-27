@@ -10,15 +10,19 @@ ROOT = Path(__file__).resolve().parents[1]
 SCHEMAS: dict[str, dict] = {}
 
 def ref(name):
+    """Return a local component-schema reference without checking its existence."""
     return {"$ref": f"#/components/schemas/{name}"}
 
 def nullable(schema):
+    """Allow either a copied schema or JSON null."""
     return {"anyOf": [copy.deepcopy(schema), {"type": "null"}]}
 
 def array(schema):
+    """Build an array schema with an independent copy of its item schema."""
     return {"type": "array", "items": copy.deepcopy(schema)}
 
 def obj(properties, required=None, description=None):
+    """Build a closed object schema, omitting required when it is None."""
     result = {"type": "object", "additionalProperties": False, "properties": properties}
     if required is not None:
         result["required"] = required
@@ -27,10 +31,18 @@ def obj(properties, required=None, description=None):
     return result
 
 def add(name, properties, required=None, description=None):
+    """Register or replace a schema and return its reference.
+
+    All properties are required by default; an explicit list overrides that default.
+    """
     SCHEMAS[name] = obj(properties, list(properties) if required is None else required, description)
     return ref(name)
 
 def resource(name, input_name, extra=None):
+    """Register a resource with metadata, input fields, and optional extra fields.
+
+    All merged fields are required. Missing source schemas raise KeyError.
+    """
     properties = {**SCHEMAS["Meta"]["properties"], **SCHEMAS[input_name]["properties"], **(extra or {})}
     return add(name, properties)
 
@@ -149,12 +161,19 @@ PATHS = {}
 ERROR_STATUSES = {"400": "Malformed request", "401": "Missing or invalid authentication", "403": "Authenticated subject is not configured owner", "404": "Missing or inaccessible record", "409": "Domain conflict, closed month, or reused idempotency key", "412": "Stale resource version", "422": "Invalid financial data", "428": "Missing version precondition", "413": "Request body exceeds 1 MiB", "415": "Unsupported media type", "500": "Internal error", "503": "Dependency unavailable"}
 
 def response(schema, description="Success", etag=False):
+    """Build a JSON response with common headers and an optional version ETag."""
     headers = copy.deepcopy(HEADERS)
     if etag:
         headers["ETag"] = {"description": "Strong optimistic concurrency resource version.", "schema": {"type": "string", "pattern": '^"[1-9][0-9]*"$'}}
     return {"description": description, "headers": headers, "content": {"application/json": {"schema": schema}}}
 
 def operation(path, method, name, result, request=None, status=200, version=False, listing=False, month_filter=False, deferred=False, summary=None):
+    """Register a path operation in PATHS with result and optional request schema names.
+
+    Flags add version, pagination, or month parameters. Mutating methods get retry
+    keys. Deferred operations retain their planned success response and add 501.
+    An existing operation at the same path and method is replaced.
+    """
     parameters = []
     for field in ["id", "month"]:
         if "{" + field + "}" in path:
@@ -218,6 +237,11 @@ for name in ["healthz", "readyz"]:
 DOCUMENT = {"openapi": "3.1.0", "info": {"title": "Folio shared API", "version": "1.0.0", "description": "Shared server-computed financial contracts for React and Kotlin Android. Manual financial core is implemented. Explicit x-implementation=deferred routes return 501 until provider milestones. See api/README.md for accounting and transition rules."}, "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema", "servers": [{"url": "/api/v1"}], "security": [{"BearerAuth": []}], "paths": PATHS, "components": {"securitySchemes": {"BearerAuth": {"type": "http", "scheme": "bearer", "bearerFormat": "JWT or explicit local dev token", "description": "Configured single owner only. Local bypass token requires explicit development auth and cannot start in production."}}, "parameters": PARAMS, "schemas": SCHEMAS}}
 
 def main():
+    """Write the generated contract, or check it without writing with --check.
+
+    Argument errors and missing or different output in check mode raise SystemExit;
+    file access errors propagate.
+    """
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--check", action="store_true")
     args = parser.parse_args()

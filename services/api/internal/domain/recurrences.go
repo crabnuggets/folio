@@ -2,6 +2,8 @@ package domain
 
 import "time"
 
+// validateRecurrence checks the kind, nonnegative minor-unit estimate, and inclusive
+// month interval, propagating posting-account errors for an optional account.
 func (s *State) validateRecurrence(in RecurrenceInput) error {
 	if !planKinds[in.Kind] || !ValidMonth(in.StartMonth) {
 		return Invalid("Recurrence requires a supported kind and start month")
@@ -23,6 +25,9 @@ func (s *State) validateRecurrence(in RecurrenceInput) error {
 	}
 	return nil
 }
+// CreateRecurrence stores and audits an expectation template without creating plan
+// lines or postings. It propagates validation and account errors and returns
+// MONTH_CLOSED if the inclusive interval overlaps a closed review.
 func (s *State) CreateRecurrence(in RecurrenceInput) (Recurrence, error) {
 	if err := s.validateRecurrence(in); err != nil {
 		return Recurrence{}, err
@@ -37,6 +42,11 @@ func (s *State) CreateRecurrence(in RecurrenceInput) (Recurrence, error) {
 	s.Audit("recurrence.created", r.ID, "")
 	return r, nil
 }
+// ReviseRecurrence returns a new template and ends its predecessor the month before
+// the new start, advancing the predecessor's version and auditing the revision.
+// It rejects missing or stale predecessors, invalid inputs or start months,
+// superseded predecessors, and changes affecting closed months or existing future
+// plan lines. expected is the predecessor's version.
 func (s *State) ReviseRecurrence(id string, in RecurrenceInput, expected int64) (Recurrence, error) {
 	old, ok := s.Recurrences[id]
 	if !ok {

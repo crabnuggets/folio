@@ -2,6 +2,10 @@ package domain
 
 import "strings"
 
+// CreatePeriod stores and audits reconciliation observations without posting cash
+// or spending. Remainder is additions minus deductions in minor units; proposed
+// top-up is the shortfall, or zero. Invalid dates, negative observations, missing
+// evidence, and closed reporting months return errors.
 func (s *State) CreatePeriod(in PeriodInput) (Period, error) {
 	if !ValidDate(in.StartDate) || !ValidDate(in.EndDate) || in.EndDate < in.StartDate || !ValidMonth(in.ReportingMonth) {
 		return Period{}, Invalid("Reconciliation period requires valid dates and reporting month")

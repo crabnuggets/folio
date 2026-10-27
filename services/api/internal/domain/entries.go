@@ -2,6 +2,10 @@ package domain
 
 import "strings"
 
+// validateEntry normalizes the reporting month and checks posting directions,
+// funding boundaries, cost recovery limits, and plan links. excludeID omits the
+// entry being replaced from related-entry checks and caps. Validation, missing
+// reference, archived-account, closed-month, and recovery-cap errors are returned.
 func (s *State) validateEntry(input EntryInput, excludeID string) (EntryInput, error) {
 	if input.AmountMinor <= 0 {
 		return EntryInput{}, Invalid("Entry amount must be positive")
@@ -148,6 +152,8 @@ func (s *State) validateEntry(input EntryInput, excludeID string) (EntryInput, e
 	return input, nil
 }
 
+// CreateEntry validates and posts a positive minor-unit movement, advances its
+// reporting month, and audits it. Posting validation errors are propagated.
 func (s *State) CreateEntry(input EntryInput) (Entry, error) {
 	input, err := s.validateEntry(input, "")
 	if err != nil {
@@ -160,6 +166,10 @@ func (s *State) CreateEntry(input EntryInput) (Entry, error) {
 	return entry, nil
 }
 
+// CorrectEntry deactivates an entry and returns its replacement, or the voided
+// original when Replacement is nil. It audits the change and advances affected
+// months. Missing records, stale versions, inactive or linked entries, blank
+// reasons, closed months, and invalid replacement postings are rejected.
 func (s *State) CorrectEntry(id string, input EntryCorrection, expected int64) (Entry, error) {
 	original, ok := s.Entries[id]
 	if !ok {
@@ -205,6 +215,8 @@ func (s *State) CorrectEntry(id string, input EntryCorrection, expected int64) (
 	return original, nil
 }
 
+// entryHasLinks reports references that prevent correcting an entry, including
+// active related entries, settlements, receipt matches, claims, and refund credits.
 func (s *State) entryHasLinks(id string) bool {
 	for _, e := range s.Entries {
 		if e.Active && e.RelatedEntryID != nil && *e.RelatedEntryID == id {
@@ -234,6 +246,9 @@ func (s *State) entryHasLinks(id string) bool {
 	return false
 }
 
+// validateEntryPlanLine requires a non-nil ID identifying a line in month's plan
+// with a compatible contribution kind and account. It returns validation errors
+// for malformed or incompatible links and NOT_FOUND when the line is absent.
 func (s *State) validateEntryPlanLine(month string, id *string, kind string, input EntryInput) error {
 	if !ValidID(*id) {
 		return Invalid("Plan line ID must be a UUID")

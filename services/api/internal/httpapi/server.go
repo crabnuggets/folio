@@ -34,6 +34,9 @@ type errorEnvelope struct {
 	} `json:"error"`
 }
 
+// New builds the API for ownerID with public liveness and database-readiness routes.
+// middleware wraps /api/v1/; nil denies all API access. Responses receive request
+// and security headers, and recovered panics produce a public internal error.
 func New(db store.Store, ownerID string, middleware func(http.Handler) http.Handler) http.Handler {
 	s := &server{db, ownerID}
 	api := http.NewServeMux()
@@ -73,6 +76,8 @@ func New(db store.Store, ownerID string, middleware func(http.Handler) http.Hand
 		root.ServeHTTP(w, r)
 	})
 }
+// writeError sends domain error details with the response's request ID.
+// Other errors become a generic 503 response without exposing their contents.
 func writeError(w http.ResponseWriter, r *http.Request, err error) {
 	var de *domain.Error
 	if !errors.As(err, &de) {
@@ -88,6 +93,8 @@ func writeError(w http.ResponseWriter, r *http.Request, err error) {
 	v.Error.RequestID = w.Header().Get("X-Request-ID")
 	writeJSON(w, r, de.Status, v, 0)
 }
+// writeJSON sends a JSON response with an ETag for positive versions.
+// Encoding failures become a public 500 error response.
 func writeJSON(w http.ResponseWriter, r *http.Request, status int, v any, version int64) {
 	result, err := store.JSON(status, v, version)
 	if err != nil {
@@ -96,6 +103,7 @@ func writeJSON(w http.ResponseWriter, r *http.Request, status int, v any, versio
 	}
 	writeResult(w, result)
 }
+// writeResult sends the encoded status, body, and optional ETag, ignoring write errors.
 func writeResult(w http.ResponseWriter, result store.Result) {
 	w.Header().Set("Content-Type", "application/json")
 	if result.ETag != "" {
@@ -104,6 +112,9 @@ func writeResult(w http.ResponseWriter, result store.Result) {
 	w.WriteHeader(result.Status)
 	_, _ = w.Write(result.Body)
 }
+// readJSON decodes one request object, checking required fields and rejecting null,
+// unknown fields, incompatible values, and trailing JSON with a 400 MALFORMED_JSON
+// error. Draft candidate completeness is deferred until acceptance.
 func readJSON[T any](body []byte) (T, error) {
 	var in T
 	if err := validateRequired(body, reflect.TypeOf(in)); err != nil {
@@ -123,6 +134,8 @@ func readJSON[T any](body []byte) (T, error) {
 	}
 	return in, nil
 }
+// version reads a strong If-Match ETag containing a canonical positive int64.
+// Missing preconditions return 428; malformed or out-of-range versions return 400.
 func version(r *http.Request) (int64, error) {
 	v := r.Header.Get("If-Match")
 	if v == "" {
@@ -138,6 +151,8 @@ func version(r *http.Request) (int64, error) {
 	}
 	return n, nil
 }
+// read loads owner state and sends fn's value with status 200 and its optional
+// version ETag. Store and callback errors are sent through writeError.
 func (s *server) read(w http.ResponseWriter, r *http.Request, fn func(*domain.State) (any, int64, error)) {
 	state, e := s.store.Read(r.Context(), s.owner)
 	if e != nil {
@@ -151,6 +166,11 @@ func (s *server) read(w http.ResponseWriter, r *http.Request, fn func(*domain.St
 	}
 	writeJSON(w, r, 200, v, ver)
 }
+// mutate validates a UUID retry key, JSON media type, a body of at most 1 MiB,
+// and If-Match when versioned. It executes fn transactionally, validates summaries,
+// and stores the encoded response for retries. Request identity includes method,
+// URI, If-Match, and exact body bytes; replayed responses carry Idempotency-Replayed.
+// Request, callback, summary, storage, and encoding errors are sent through writeError.
 func mutate[T any](s *server, w http.ResponseWriter, r *http.Request, status int, versioned bool, fn func(*domain.State, T, int64) (any, int64, error)) {
 	key := r.Header.Get("Idempotency-Key")
 	if !domain.ValidID(key) {
@@ -212,6 +232,9 @@ type page[T any] struct {
 	NextCursor *string `json:"next_cursor"`
 }
 
+// paginate returns matching values in lexicographic key order after an exclusive
+// UUID cursor. The limit defaults to 50 and must be 1 through 100; invalid limits
+// or cursors return INVALID_PAGINATION. NextCursor is nil on the last page.
 func paginate[T any](r *http.Request, values map[string]T, filter func(T) bool) (page[T], error) {
 	p := page[T]{Items: []T{}}
 	limit := 50
@@ -243,6 +266,9 @@ func paginate[T any](r *http.Request, values map[string]T, filter func(T) bool) 
 	}
 	return p, nil
 }
+// list sends a filtered page of owner records, rejecting an invalid optional month
+// query with INVALID_MONTH. The caller's filter determines month membership;
+// storage and pagination errors are sent through writeError.
 func list[T any](s *server, w http.ResponseWriter, r *http.Request, fn func(*domain.State) map[string]T, filter func(T) bool) {
 	if month := r.URL.Query().Get("month"); month != "" && !domain.ValidMonth(month) {
 		writeError(w, r, domain.Fail(400, "INVALID_MONTH", "month must be YYYY-MM"))
@@ -250,6 +276,7 @@ func list[T any](s *server, w http.ResponseWriter, r *http.Request, fn func(*dom
 	}
 	s.read(w, r, func(state *domain.State) (any, int64, error) { v, e := paginate(r, fn(state), filter); return v, 0, e })
 }
+// lookup returns the record named by the id path parameter, or NOT_FOUND if absent.
 func lookup[T any](r *http.Request, values map[string]T) (T, error) {
 	id := r.PathValue("id")
 	v, ok := values[id]
@@ -259,6 +286,8 @@ func lookup[T any](r *http.Request, values map[string]T) (T, error) {
 	return v, nil
 }
 
+// routes registers financial reads, mutations, export, and deferred integration
+// endpoints, which respond with 501 FEATURE_NOT_AVAILABLE.
 func (s *server) routes(m *http.ServeMux) {
 	m.HandleFunc("GET /api/v1/settings", func(w http.ResponseWriter, r *http.Request) {
 		s.read(w, r, func(st *domain.State) (any, int64, error) { return st.Settings, st.Settings.Version, nil })

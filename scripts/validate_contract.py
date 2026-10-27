@@ -28,6 +28,10 @@ for path in sorted((ROOT / "fixtures").glob("*.json")):
     assert fixture["expected_summary"], path
     identities = {}
     def resolve(value):
+        """Recursively replace $ references with prior fixture resource identities.
+
+        Unknown references raise AssertionError.
+        """
         if isinstance(value, str) and value.startswith("$"):
             assert value[1:] in identities, f"unknown fixture reference {value}"
             return identities[value[1:]]
@@ -37,6 +41,10 @@ for path in sorted((ROOT / "fixtures").glob("*.json")):
             return [resolve(item) for item in value]
         return value
     def check(schema_name, value):
+        """Validate a fixture value against a component schema, including formats.
+
+        Schema reference and validation errors propagate.
+        """
         schema = {"$ref": "#/components/schemas/" + schema_name, "components": spec["components"]}
         Draft202012Validator(schema, format_checker=Draft202012Validator.FORMAT_CHECKER).validate(value)
     for group, schema_name in [("accounts", "AccountInput"), ("entries", "EntryInput"), ("statements", "StatementInput"), ("claims", "ClaimInput")]:

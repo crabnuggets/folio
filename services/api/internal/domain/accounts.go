@@ -14,6 +14,7 @@ func CurrencyExponent(code string) (int, bool) {
 	return exponent, ok
 }
 
+// ValidateCurrency returns a validation error unless code is supported and matches settings.
 func (s *State) ValidateCurrency(code string) error {
 	if _, ok := CurrencyExponent(code); !ok || code != s.Settings.Currency {
 		return Invalid("Currency must equal the configured supported currency")
@@ -21,6 +22,9 @@ func (s *State) ValidateCurrency(code string) error {
 	return nil
 }
 
+// UpdateSettings replaces and audits settings when expected matches their version.
+// It rejects unsupported currencies, invalid timezones, and currency changes after
+// financial setup; version mismatches return STALE_VERSION.
 func (s *State) UpdateSettings(input SettingsInput, expected int64) (Settings, error) {
 	if err := CheckVersion(s.Settings.Version, expected); err != nil {
 		return Settings{}, err
@@ -44,6 +48,9 @@ func (s *State) UpdateSettings(input SettingsInput, expected int64) (Settings, e
 	return s.Settings, nil
 }
 
+// normalizeAccount trims the alias and copies and sorts funding boundaries.
+// It returns validation errors for invalid aliases, kinds, or boundaries and for
+// credit cards marked as liquid cash or included in the funding boundary.
 func normalizeAccount(input AccountInput) (AccountInput, error) {
 	input.Alias = strings.TrimSpace(input.Alias)
 	if input.Alias == "" || len(input.Alias) > 120 {
@@ -76,6 +83,8 @@ func normalizeAccount(input AccountInput) (AccountInput, error) {
 	return input, nil
 }
 
+// CreateAccount validates, normalizes, stores, and audits an account.
+// Currency and account validation errors are returned before storage.
 func (s *State) CreateAccount(input AccountInput) (Account, error) {
 	if err := s.ValidateCurrency(input.Currency); err != nil {
 		return Account{}, err
@@ -90,6 +99,8 @@ func (s *State) CreateAccount(input AccountInput) (Account, error) {
 	return account, nil
 }
 
+// boundaryIncluded uses the latest boundary effective on or before month,
+// returning false when none applies. Boundaries need not be sorted.
 func boundaryIncluded(boundaries []Boundary, month string) bool {
 	included := false
 	// Work with unsorted historical data as well as normalized commands.
@@ -103,11 +114,17 @@ func boundaryIncluded(boundaries []Boundary, month string) bool {
 	return included
 }
 
+// FundingIncluded reports effective funding membership for month, including for
+// archived accounts. Missing accounts and months before the first boundary return false.
 func (s *State) FundingIncluded(accountID, month string) bool {
 	account, ok := s.Accounts[accountID]
 	return ok && boundaryIncluded(account.FundingBoundary, month)
 }
 
+// UpdateAccount replaces and audits an account at the expected version.
+// It returns lookup, version, and validation errors, ACCOUNT_REFERENCED for kind
+// changes to referenced accounts, or BOUNDARY_RESTATEMENT_REQUIRED when funding
+// membership changes in a month with recorded entries, statements, or a closed review.
 func (s *State) UpdateAccount(id string, input AccountInput, expected int64) (Account, error) {
 	old, ok := s.Accounts[id]
 	if !ok {
@@ -151,6 +168,8 @@ func (s *State) UpdateAccount(id string, input AccountInput, expected int64) (Ac
 	return old, nil
 }
 
+// accountReferenced reports whether reviews or financial records refer to the account,
+// including historical records that are no longer active.
 func (s *State) accountReferenced(id string) bool {
 	for _, m := range s.Months {
 		for _, cardID := range m.ReviewedCardIDs {
@@ -189,6 +208,9 @@ func (s *State) accountReferenced(id string) bool {
 	return false
 }
 
+// AccountForPosting returns an active account in the configured currency.
+// It returns validation errors for invalid IDs or currencies, NOT_FOUND for missing
+// accounts, and ACCOUNT_ARCHIVED for inactive accounts.
 func (s *State) AccountForPosting(id string) (Account, error) {
 	if !ValidID(id) {
 		return Account{}, Invalid("Account ID must be a UUID")
@@ -206,6 +228,9 @@ func (s *State) AccountForPosting(id string) (Account, error) {
 	return account, nil
 }
 
+// NormalizeReportingMonth defaults an omitted month to the effective date's month.
+// Invalid dates or months and overrides without a nonblank reason return validation
+// errors; a closed reporting month returns MONTH_CLOSED.
 func (s *State) NormalizeReportingMonth(date, month, reason string) (string, error) {
 	if !ValidDate(date) {
 		return "", Invalid("Invalid effective date")
@@ -225,6 +250,10 @@ func (s *State) NormalizeReportingMonth(date, month, reason string) (string, err
 	return month, nil
 }
 
+// CreateSnapshot stores and audits a balance observation in UTC and advances its
+// month in the configured timezone. It propagates currency and posting-account
+// errors and rejects invalid timestamps, timestamps over five minutes ahead,
+// invalid configured timezones, and closed observation months.
 func (s *State) CreateSnapshot(input SnapshotInput) (Snapshot, error) {
 	if err := s.ValidateCurrency(input.Currency); err != nil {
 		return Snapshot{}, err

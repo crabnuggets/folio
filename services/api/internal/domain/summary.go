@@ -9,14 +9,18 @@ import (
 // summarySum uses arbitrary precision internally so aggregation cannot wrap int64.
 type summarySum struct{ n big.Int }
 
+// add accumulates minor units without limiting the intermediate total to int64.
 func (a *summarySum) add(v Money) { a.n.Add(&a.n, big.NewInt(int64(v))) }
+// sub subtracts minor units without limiting the intermediate total to int64.
 func (a *summarySum) sub(v Money) { a.n.Sub(&a.n, big.NewInt(int64(v))) }
+// value returns the minor-unit total or a validation error if it exceeds int64.
 func (a *summarySum) value() (Money, error) {
 	if !a.n.IsInt64() {
 		return 0, Invalid("Financial total exceeds the supported amount range")
 	}
 	return Money(a.n.Int64()), nil
 }
+// summaryMoney sums minor units, rejecting only a final total outside int64.
 func summaryMoney(values ...Money) (Money, error) {
 	var a summarySum
 	for _, v := range values {
@@ -24,14 +28,24 @@ func summaryMoney(values ...Money) (Money, error) {
 	}
 	return a.value()
 }
+// summarySubtract returns a minus b in minor units, or a validation error on overflow.
 func summarySubtract(a, b Money) (Money, error) {
 	var sum summarySum
 	sum.add(a)
 	sum.sub(b)
 	return sum.value()
 }
+// summaryPointer makes a known minor-unit amount available as an optional value.
 func summaryPointer(v Money) *Money { return &v }
 
+// Summarize computes a month's spending, funding, coverage, and forecasts without
+// changing state. Amounts use minor units; incomplete spending coverage retains
+// labeled subtotals and leaves final surplus nil. Projections with unknown inputs remain nil.
+// Savings rate is a ratio rounded to six decimal places, present only with complete
+// spending coverage and positive income. Snapshots are the latest observations per
+// liquid account strictly before the next month in the configured timezone.
+// Invalid months, currencies, timezones, allocations, spending inputs, signed plan
+// estimates without explicit remaining amounts, and out-of-range totals return errors.
 func (s *State) Summarize(month string) (Summary, error) {
 	m, err := s.GetMonth(month)
 	if err != nil {
@@ -313,6 +327,11 @@ func (s *State) Summarize(month string) (Summary, error) {
 	return out, nil
 }
 
+// applyForecast extends out with plan actuals keyed by line ID and remaining
+// minor-unit estimates, updating coverage for pending lines. The known-input flags
+// control whether projections are populated; unpaid cards also require explicit
+// funding plans. Invalid months, ambiguous signed estimates, statement-balance
+// errors, and out-of-range totals return errors; out may be partially updated.
 func (s *State) applyForecast(month string, actual map[string]*summarySum, out *Summary, spendingInputsKnown, fundingInputsKnown bool) error {
 	plan, err := s.GetPlan(month)
 	if err != nil {
@@ -410,6 +429,8 @@ func (s *State) applyForecast(month string, actual map[string]*summarySum, out *
 	return nil
 }
 
+// Insights returns applicable coverage, shortfall, and pending-claim notices with
+// minor-unit values, or an empty slice when none apply. Summary errors propagate.
 func (s *State) Insights(month string) ([]Insight, error) {
 	summary, err := s.Summarize(month)
 	if err != nil {

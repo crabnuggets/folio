@@ -28,6 +28,9 @@ func (s *State) CreateDraft(in DraftInput) (Draft, error) {
 	s.Audit("draft.created", d.ID, "")
 	return d, nil
 }
+// AcceptDraft posts a pending candidate and records its new record ID, advancing
+// and auditing the draft. It rejects missing drafts, stale draft versions, finalized
+// drafts, and unknown statement payables, and propagates posting validation errors.
 func (s *State) AcceptDraft(id string, expected int64) (Draft, error) {
 	d, ok := s.Drafts[id]
 	if !ok {
@@ -67,6 +70,9 @@ func (s *State) AcceptDraft(id string, expected int64) (Draft, error) {
 	s.Audit("draft.accepted", id, "")
 	return d, nil
 }
+// RejectDraft finalizes and audits a pending draft without posting its candidate.
+// It rejects missing drafts, stale draft versions, finalized drafts, and reasons
+// that are blank or exceed 2000 bytes.
 func (s *State) RejectDraft(id, reason string, expected int64) (Draft, error) {
 	d, ok := s.Drafts[id]
 	if !ok {

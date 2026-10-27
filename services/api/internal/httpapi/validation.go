@@ -26,6 +26,10 @@ var requiredFields = map[string][]string{
 	"DraftInput":                {"source_id", "external_id", "evidence"},
 }
 
+// validateRequired recursively checks registered required fields and rejects null
+// non-pointer fields in request structs. DraftInput skips candidate completeness
+// checks. Invalid shapes, missing required fields, or disallowed nulls return MALFORMED_JSON;
+// scalar value decoding and unknown-field checks are left to readJSON.
 func validateRequired(body []byte, t reflect.Type) error {
 	for t.Kind() == reflect.Pointer {
 		t = t.Elem()

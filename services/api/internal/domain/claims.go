@@ -5,6 +5,9 @@ import (
 	"strings"
 )
 
+// validateClaim defaults an omitted state to pending and checks the amount,
+// currency, description, receipt date, and optional cost link. Invalid inputs and
+// missing linked expenses or statements return errors.
 func (s *State) validateClaim(in ClaimInput) (ClaimInput, error) {
 	if in.Currency != s.Settings.Currency || in.AmountMinor <= 0 {
 		return in, Invalid("Claim requires a positive amount in the configured currency")
@@ -46,6 +49,9 @@ func (s *State) validateClaim(in ClaimInput) (ClaimInput, error) {
 	}
 	return in, nil
 }
+// CreateClaim stores and audits an expected reimbursement without posting cash,
+// advancing its anchor month when dated or linked. It propagates validation and
+// closed-anchor-month errors and rejects receipt states without confirmed matches.
 func (s *State) CreateClaim(in ClaimInput) (Claim, error) {
 	in, e := s.validateClaim(in)
 	if e != nil {
@@ -65,6 +71,8 @@ func (s *State) CreateClaim(in ClaimInput) (Claim, error) {
 	s.bumpClaimMonths(claim)
 	return claim, nil
 }
+// claimMatchedAmount totals receipt allocations in minor units, including matches
+// whose recognized-cost recovery has not yet been classified.
 func (s *State) claimMatchedAmount(id string) *big.Int {
 	total := new(big.Int)
 	for _, match := range s.ReceiptMatches {
@@ -89,12 +97,17 @@ func (s *State) ClaimMonth(claim Claim) string {
 	}
 	return ""
 }
+// bumpClaimMonths advances the claim's anchor month when it has one.
 func (s *State) bumpClaimMonths(claim Claim) {
 	if month := s.ClaimMonth(claim); month != "" {
 		s.BumpMonth(month)
 	}
 }
 
+// UpdateClaim replaces and audits a claim at the expected version and advances
+// affected anchor months. Receipt states are reconciled with confirmed allocations.
+// It rejects missing or stale claims, invalid inputs, closed anchor months, amounts
+// below allocations, and cost-link changes after a classified recovery.
 func (s *State) UpdateClaim(id string, in ClaimInput, expected int64) (Claim, error) {
 	old, ok := s.Claims[id]
 	if !ok {
@@ -151,6 +164,13 @@ func (s *State) UpdateClaim(id string, in ClaimInput, expected int64) (Claim, er
 	return old, nil
 }
 
+// MatchReceipt allocates a confirmed receipt and updates and audits the claim's
+// receipt state. expected is the claim version. A known cost defaults recovery to
+// the receipt's reporting month; an unknown cost permits allocation without recovery.
+// An existing unclassified allocation can gain recovery at the same amount and ID.
+// Missing records, stale versions, disputed or waived claims, invalid or duplicate
+// links, closed affected months, and claim, receipt, or cost caps return errors;
+// statement-spending errors propagate. No new cash entry is posted.
 func (s *State) MatchReceipt(claimID string, in ReceiptMatchInput, expected int64) (ReceiptMatch, error) {
 	claim, ok := s.Claims[claimID]
 	if !ok {

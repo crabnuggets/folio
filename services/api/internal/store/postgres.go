@@ -14,6 +14,9 @@ import (
 
 type Postgres struct{ pool *pgxpool.Pool }
 
+// NewPostgres opens a connection pool, checks connectivity, and applies pending
+// embedded migrations under a transaction lock. Configuration, connection, and
+// migration failures become DEPENDENCY_UNAVAILABLE; callers must close a successful pool.
 func NewPostgres(ctx context.Context, url string) (*Postgres, error) {
 	config, err := pgxpool.ParseConfig(url)
 	if err != nil {
@@ -63,6 +66,9 @@ func NewPostgres(ctx context.Context, url string) (*Postgres, error) {
 	}
 	return p, nil
 }
+// begin opens a transaction with the owner identity set for row-level security.
+// Invalid owners return FORBIDDEN; database failures become DEPENDENCY_UNAVAILABLE.
+// The caller must commit or roll back a successful transaction.
 func (p *Postgres) begin(ctx context.Context, owner string) (pgx.Tx, error) {
 	if err := validateOwner(owner); err != nil {
 		return nil, err
@@ -77,6 +83,8 @@ func (p *Postgres) begin(ctx context.Context, owner string) (pgx.Tx, error) {
 	}
 	return tx, nil
 }
+// readState loads the owner's aggregate or returns a new default state when absent.
+// Query and JSON decoding failures become DEPENDENCY_UNAVAILABLE.
 func readState(ctx context.Context, tx pgx.Tx, owner string) (*domain.State, error) {
 	var raw []byte
 	err := tx.QueryRow(ctx, "SELECT document FROM folio.owner_state WHERE owner_id=$1", owner).Scan(&raw)
@@ -92,6 +100,9 @@ func readState(ctx context.Context, tx pgx.Tx, owner string) (*domain.State, err
 	}
 	return state, nil
 }
+// Read loads an owner state without persisting defaults for a missing aggregate.
+// Invalid owners return FORBIDDEN; database and decoding errors become
+// DEPENDENCY_UNAVAILABLE.
 func (p *Postgres) Read(ctx context.Context, owner string) (*domain.State, error) {
 	tx, err := p.begin(ctx, owner)
 	if err != nil {
@@ -100,6 +111,13 @@ func (p *Postgres) Read(ctx context.Context, owner string) (*domain.State, error
 	defer tx.Rollback(context.Background())
 	return readState(ctx, tx, owner)
 }
+// Execute serializes owner commands and atomically commits their state and response.
+// key is an owner-scoped UUID and hash identifies the request. Matching retries
+// return the stored result with true without calling fn; new commits return false.
+// Callback errors propagate and roll back without consuming the key. Invalid owners,
+// invalid keys, and changed retry hashes return FORBIDDEN, INVALID_IDEMPOTENCY_KEY,
+// and IDEMPOTENCY_CONFLICT respectively; database and serialization failures become
+// DEPENDENCY_UNAVAILABLE. The callback is responsible for domain validation.
 func (p *Postgres) Execute(ctx context.Context, owner, key, hash string, fn func(*domain.State) (Result, error)) (Result, bool, error) {
 	if !domain.ValidID(key) {
 		return Result{}, false, domain.Fail(400, "INVALID_IDEMPOTENCY_KEY", "Idempotency-Key must be a UUID")
@@ -157,10 +175,12 @@ func (p *Postgres) Execute(ctx context.Context, owner, key, hash string, fn func
 	}
 	return result, false, nil
 }
+// Ping checks database connectivity, converting failures to DEPENDENCY_UNAVAILABLE.
 func (p *Postgres) Ping(ctx context.Context) error {
 	if p.pool.Ping(ctx) != nil {
 		return unavailable()
 	}
 	return nil
 }
+// Close releases the connection pool.
 func (p *Postgres) Close() { p.pool.Close() }

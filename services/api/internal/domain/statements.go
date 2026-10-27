@@ -5,6 +5,8 @@ import (
 	"strings"
 )
 
+// statementMoney sums minor units and returns a validation error if the final
+// result exceeds the signed 64-bit range; intermediate sums may exceed it.
 func statementMoney(values ...Money) (Money, error) {
 	total := new(big.Int)
 	for _, v := range values {
@@ -16,6 +18,10 @@ func statementMoney(values ...Money) (Money, error) {
 	return Money(total.Int64()), nil
 }
 
+// StatementSpending returns net cycle spending in minor units, or nil when unknown.
+// Spending is either an explicit net amount with evidence or charges plus fees
+// and interest minus refunds. Mixed or incomplete inputs, negative components,
+// missing net evidence, and an out-of-range total return validation errors.
 func (s *State) StatementSpending(st Statement) (*Money, error) {
 	fields := []*Money{st.NewChargesMinor, st.FeesMinor, st.InterestMinor, st.RefundsMinor}
 	n := 0
@@ -52,6 +58,10 @@ func (s *State) StatementSpending(st Statement) (*Money, error) {
 	return &v, nil
 }
 
+// StatementBalance returns cycle spending and the remaining payable or excess
+// credit in minor units, accounting for carry history after the cycle cutoff.
+// Inactive payables have zero remaining and credit amounts. Spending validation
+// errors and balances or credits outside the signed 64-bit range are returned.
 func (s *State) StatementBalance(st Statement) (StatementBalance, error) {
 	spending, e := s.StatementSpending(st)
 	if e != nil {
@@ -104,6 +114,8 @@ func (s *State) statementPayable(st Statement) *big.Int {
 	return balance
 }
 
+// checkStatementCredit rejects a payable whose magnitude would exceed the signed
+// 64-bit range after subtracting extra minor units of payment or credit.
 func (s *State) checkStatementCredit(st Statement, extra Money) error {
 	balance := s.statementPayable(st)
 	balance.Sub(balance, big.NewInt(int64(extra)))
@@ -114,6 +126,10 @@ func (s *State) checkStatementCredit(st Statement, extra Money) error {
 	return nil
 }
 
+// validateStatement defaults the reporting month to the due month and checks the
+// card, dates, amounts, spending evidence, plan match, and carry relationship.
+// old identifies the statement being revised, or nil for creation. Invalid inputs,
+// missing references, closed affected months, and duplicate active cycles return errors.
 func (s *State) validateStatement(in StatementInput, old *Statement) (StatementInput, error) {
 	if in.Currency != s.Settings.Currency {
 		return in, Invalid("Statement currency must match settings")
@@ -192,6 +208,9 @@ func (s *State) validateStatement(in StatementInput, old *Statement) (StatementI
 	return in, nil
 }
 
+// CreateStatement stores and audits an active statement and retires the prior
+// payable when carrying it forward, preserving prior spending. It advances affected
+// reporting and due months and propagates statement-validation and credit-range errors.
 func (s *State) CreateStatement(in StatementInput) (Statement, error) {
 	in, e := s.validateStatement(in, nil)
 	if e != nil {
@@ -215,6 +234,7 @@ func (s *State) CreateStatement(in StatementInput) (Statement, error) {
 	s.bumpStatementMonths(st.StatementInput)
 	return st, nil
 }
+// sameStatementRef compares optional record IDs, treating two nil references as equal.
 func sameStatementRef(a, b *string) bool {
 	if a == nil || b == nil {
 		return a == nil && b == nil
@@ -222,6 +242,12 @@ func sameStatementRef(a, b *string) bool {
 	return *a == *b
 }
 
+// ReviseStatement returns a replacement and retires the original, moving its
+// settlements, credits, and claims to the new ID and auditing the changes.
+// It advances affected months and rejects missing, stale, inactive, or carried
+// source statements, blank reasons, invalid replacements, closed months, changed
+// card/cycle/carry links, invalidated associations, and spending below recoveries.
+// expected is the original statement's version; credit-range errors also propagate.
 func (s *State) ReviseStatement(id string, in StatementRevision, expected int64) (Statement, error) {
 	old, ok := s.Statements[id]
 	if !ok {
@@ -327,6 +353,9 @@ func (s *State) ReviseStatement(id string, in StatementRevision, expected int64)
 	return st, nil
 }
 
+// payableForMutation returns an active payable at the expected statement version.
+// Missing records, stale versions, inactive payables, and closed reporting or due
+// months return errors.
 func (s *State) payableForMutation(id string, expected int64) (Statement, error) {
 	st, ok := s.Statements[id]
 	if !ok {
@@ -344,6 +373,12 @@ func (s *State) payableForMutation(id string, expected int64) (Statement, error)
 	return st, nil
 }
 
+// CreateSettlement allocates an existing card payment to a payable without posting
+// another movement or expense. The positive minor-unit amount may exceed the due
+// amount, creating credit, but total allocations cannot exceed the payment.
+// It advances the statement version and affected months and audits the link.
+// Payable lookup/version/month errors, invalid or duplicate payment links, closed
+// payment months, allocation caps, and credit-range errors are returned.
 func (s *State) CreateSettlement(statementID string, in SettlementInput, expected int64) (Settlement, error) {
 	st, e := s.payableForMutation(statementID, expected)
 	if e != nil {
@@ -389,6 +424,11 @@ func (s *State) CreateSettlement(statementID string, in SettlementInput, expecte
 	return settlement, nil
 }
 
+// CreateObligationAdjustment records a positive minor-unit credit after the cycle
+// cutoff without changing recognized spending. It advances the statement version
+// and affected months and audits the credit. expected is the statement version.
+// Payable errors, invalid inputs or optional refund links, closed credit months,
+// credits exceeding a linked refund, and credit-range errors are returned.
 func (s *State) CreateObligationAdjustment(statementID string, in ObligationAdjustmentInput, expected int64) (ObligationAdjustment, error) {
 	st, e := s.payableForMutation(statementID, expected)
 	if e != nil {
@@ -437,6 +477,8 @@ func (s *State) ensureStatementMonthsOpen(in StatementInput) error {
 	}
 	return s.EnsureOpen(in.DueDate[:7])
 }
+// bumpStatementMonths advances each distinct reporting, due, and extra month once.
+// Callers must supply validated dates and months.
 func (s *State) bumpStatementMonths(in StatementInput, extra ...string) {
 	months := map[string]bool{in.ReportingMonth: true, in.DueDate[:7]: true}
 	for _, month := range extra {
