@@ -47,7 +47,12 @@ func (s *State) AcceptDraft(id string, expected int64) (Draft, error) {
 		}
 		recordID = v.ID
 	} else if d.Statement != nil {
-		v, e := s.CreateStatement(*d.Statement)
+		if d.Statement.AmountDueMinor == nil {
+			return Draft{}, Invalid("Statement payable is unknown; provide amount_due_minor before acceptance")
+		}
+		candidate := d.Statement.StatementInput
+		candidate.AmountDueMinor = *d.Statement.AmountDueMinor
+		v, e := s.CreateStatement(candidate)
 		if e != nil {
 			return Draft{}, e
 		}

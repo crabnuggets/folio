@@ -242,12 +242,13 @@ type Checklist struct {
 	NoStatementReasons  map[string]string `json:"no_statement_reasons"`
 }
 type Month struct {
-	Month     string     `json:"month"`
-	Version   int64      `json:"version"`
-	Revision  int64      `json:"revision"`
-	State     string     `json:"state"`
-	Checklist Checklist  `json:"checklist"`
-	ClosedAt  *time.Time `json:"closed_at"`
+	ReviewedCardIDs []string   `json:"reviewed_card_ids"`
+	Month           string     `json:"month"`
+	Version         int64      `json:"version"`
+	Revision        int64      `json:"revision"`
+	State           string     `json:"state"`
+	Checklist       Checklist  `json:"checklist"`
+	ClosedAt        *time.Time `json:"closed_at"`
 }
 type MonthTransition struct {
 	Reason    string    `json:"reason"`
@@ -280,12 +281,19 @@ type Period struct {
 	RemainderMinor     Money `json:"remainder_minor"`
 	ProposedTopUpMinor Money `json:"proposed_top_up_minor"`
 }
+
+// DraftStatementCandidate retains an unknown payable until acceptance.
+// The pointer deliberately shadows the posted DTO amount to preserve absence.
+type DraftStatementCandidate struct {
+	StatementInput
+	AmountDueMinor *Money `json:"amount_due_minor,omitempty"`
+}
 type DraftInput struct {
-	SourceID   string          `json:"source_id"`
-	ExternalID string          `json:"external_id"`
-	Entry      *EntryInput     `json:"entry"`
-	Statement  *StatementInput `json:"statement"`
-	Evidence   string          `json:"evidence"`
+	SourceID   string                   `json:"source_id"`
+	ExternalID string                   `json:"external_id"`
+	Entry      *EntryInput              `json:"entry"`
+	Statement  *DraftStatementCandidate `json:"statement"`
+	Evidence   string                   `json:"evidence"`
 }
 type Draft struct {
 	Meta
@@ -347,7 +355,7 @@ func (s *State) EnsureOpen(month string) error {
 func (s *State) BumpMonth(month string) {
 	m := s.Months[month]
 	if m.Month == "" {
-		m = Month{Month: month, Version: 1, State: "open", Checklist: Checklist{NoStatementReasons: map[string]string{}}}
+		m = Month{Month: month, Version: 1, State: "open", ReviewedCardIDs: []string{}, Checklist: Checklist{NoStatementReasons: map[string]string{}}}
 	}
 	m.Version++
 	m.Revision++

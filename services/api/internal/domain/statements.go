@@ -137,7 +137,7 @@ func (s *State) validateStatement(in StatementInput, old *Statement) (StatementI
 	if in.ReportingMonth != in.DueDate[:7] && strings.TrimSpace(in.ReportingMonthReason) == "" {
 		return in, Invalid("A reporting month override requires a reason")
 	}
-	if e := s.EnsureOpen(in.ReportingMonth); e != nil {
+	if e := s.ensureStatementMonthsOpen(in); e != nil {
 		return in, e
 	}
 	if in.AmountDueMinor < 0 {
@@ -164,6 +164,9 @@ func (s *State) validateStatement(in StatementInput, old *Statement) (StatementI
 				if line.Kind != "spending" {
 					return in, Invalid("Statements must match a spending plan line")
 				}
+				if line.AccountID != nil && *line.AccountID != in.AccountID {
+					return in, Invalid("Statement card differs from its plan line account")
+				}
 				found = true
 			}
 		}
@@ -181,7 +184,7 @@ func (s *State) validateStatement(in StatementInput, old *Statement) (StatementI
 			return in, Invalid("Carry must reference an earlier active payable on the same card")
 		}
 		if !sameCarry {
-			if e := s.EnsureOpen(prior.ReportingMonth); e != nil {
+			if e := s.ensureStatementMonthsOpen(prior.StatementInput); e != nil {
 				return in, e
 			}
 		}
@@ -205,11 +208,11 @@ func (s *State) CreateStatement(in StatementInput) (Statement, error) {
 		prior.Touch()
 		s.Statements[prior.ID] = prior
 		s.AuditChange("statement.payable_carried", prior.ID, "Payable represented by "+st.ID, before, prior)
-		s.BumpMonth(prior.ReportingMonth)
+		s.bumpStatementMonths(prior.StatementInput)
 	}
 	s.Statements[st.ID] = st
 	s.AuditChange("statement.created", st.ID, in.ReportingMonthReason, nil, st)
-	s.BumpMonth(st.ReportingMonth)
+	s.bumpStatementMonths(st.StatementInput)
 	return st, nil
 }
 func sameStatementRef(a, b *string) bool {
@@ -233,7 +236,7 @@ func (s *State) ReviseStatement(id string, in StatementRevision, expected int64)
 	if strings.TrimSpace(in.Reason) == "" {
 		return Statement{}, Invalid("Statement revision requires a reason")
 	}
-	if e := s.EnsureOpen(old.ReportingMonth); e != nil {
+	if e := s.ensureStatementMonthsOpen(old.StatementInput); e != nil {
 		return Statement{}, e
 	}
 	if !old.PayableActive {
@@ -320,10 +323,7 @@ func (s *State) ReviseStatement(id string, in StatementRevision, expected int64)
 		}
 	}
 	s.AuditChange("statement.revised", st.ID, in.Reason, before, st)
-	s.BumpMonth(old.ReportingMonth)
-	if st.ReportingMonth != old.ReportingMonth {
-		s.BumpMonth(st.ReportingMonth)
-	}
+	s.bumpStatementMonths(st.StatementInput, old.ReportingMonth, old.DueDate[:7])
 	return st, nil
 }
 
@@ -338,7 +338,7 @@ func (s *State) payableForMutation(id string, expected int64) (Statement, error)
 	if !st.Active || !st.PayableActive {
 		return st, Fail(409, "INACTIVE_RECORD", "Use the active payable statement")
 	}
-	if e := s.EnsureOpen(st.ReportingMonth); e != nil {
+	if e := s.ensureStatementMonthsOpen(st.StatementInput); e != nil {
 		return st, e
 	}
 	return st, nil
@@ -385,10 +385,7 @@ func (s *State) CreateSettlement(statementID string, in SettlementInput, expecte
 	st.Touch()
 	s.Statements[st.ID] = st
 	s.AuditChange("statement.settled", settlement.ID, "", nil, settlement)
-	s.BumpMonth(st.ReportingMonth)
-	if entry.ReportingMonth != st.ReportingMonth {
-		s.BumpMonth(entry.ReportingMonth)
-	}
+	s.bumpStatementMonths(st.StatementInput, entry.ReportingMonth)
 	return settlement, nil
 }
 
@@ -429,9 +426,23 @@ func (s *State) CreateObligationAdjustment(statementID string, in ObligationAdju
 	st.Touch()
 	s.Statements[st.ID] = st
 	s.AuditChange("statement.obligation_adjusted", adj.ID, in.Reason, nil, adj)
-	s.BumpMonth(st.ReportingMonth)
-	if in.EffectiveDate[:7] != st.ReportingMonth {
-		s.BumpMonth(in.EffectiveDate[:7])
-	}
+	s.bumpStatementMonths(st.StatementInput, in.EffectiveDate[:7])
 	return adj, nil
+}
+
+// Spending attribution and obligation due month independently affect reports.
+func (s *State) ensureStatementMonthsOpen(in StatementInput) error {
+	if err := s.EnsureOpen(in.ReportingMonth); err != nil {
+		return err
+	}
+	return s.EnsureOpen(in.DueDate[:7])
+}
+func (s *State) bumpStatementMonths(in StatementInput, extra ...string) {
+	months := map[string]bool{in.ReportingMonth: true, in.DueDate[:7]: true}
+	for _, month := range extra {
+		months[month] = true
+	}
+	for _, month := range sortedKeys(months) {
+		s.BumpMonth(month)
+	}
 }

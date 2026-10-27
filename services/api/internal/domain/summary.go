@@ -143,13 +143,22 @@ func (s *State) Summarize(month string) (Summary, error) {
 			out.Statements = append(out.Statements, balance)
 		}
 	}
-	for _, id := range sortedKeys(s.Accounts) {
-		a := s.Accounts[id]
-		if a.Kind == "credit_card" && a.Active && !cardsWithStatement[id] {
-			if m.Checklist.NoStatementReasons[id] == "" {
-				need("statement_missing:"+id, true, true)
-				forecastSpendingKnown, forecastFundingInputsKnown = false, false
+	// Closed reviews retain the card inventory reviewed by the owner. Later
+	// account setup and archival must not silently change historical coverage.
+	requiredCards := m.ReviewedCardIDs
+	if m.State != "closed" {
+		requiredCards = []string{}
+		for _, id := range sortedKeys(s.Accounts) {
+			a := s.Accounts[id]
+			if a.Kind == "credit_card" && a.Active {
+				requiredCards = append(requiredCards, id)
 			}
+		}
+	}
+	for _, id := range requiredCards {
+		if !cardsWithStatement[id] && m.Checklist.NoStatementReasons[id] == "" {
+			need("statement_missing:"+id, true, true)
+			forecastSpendingKnown, forecastFundingInputsKnown = false, false
 		}
 	}
 	// Receipt allocations and personal-cost recovery are distinct. A cash receipt can
@@ -335,7 +344,7 @@ func (s *State) applyForecast(month string, actual map[string]*summarySum, out *
 				}
 			}
 		}
-		if !line.Complete && remaining > 0 {
+		if !line.Complete && remaining != 0 {
 			out.MissingItems = append(out.MissingItems, "planned_item_pending:"+line.ID)
 			switch line.Kind {
 			case "income", "spending", "allocation":

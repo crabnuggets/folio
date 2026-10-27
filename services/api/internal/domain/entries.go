@@ -127,7 +127,7 @@ func (s *State) validateEntry(input EntryInput, excludeID string) (EntryInput, e
 		default:
 			return EntryInput{}, Invalid("This entry kind has no recognized-spending plan contribution")
 		}
-		if err := s.validateEntryPlanLine(month, input.PlanLineID, kind); err != nil {
+		if err := s.validateEntryPlanLine(month, input.PlanLineID, kind, input); err != nil {
 			return EntryInput{}, err
 		}
 	}
@@ -141,7 +141,7 @@ func (s *State) validateEntry(input EntryInput, excludeID string) (EntryInput, e
 		if destinationFunding {
 			kind = "funding_inflow"
 		}
-		if err := s.validateEntryPlanLine(month, input.FundingPlanLineID, kind); err != nil {
+		if err := s.validateEntryPlanLine(month, input.FundingPlanLineID, kind, input); err != nil {
 			return EntryInput{}, err
 		}
 	}
@@ -234,7 +234,7 @@ func (s *State) entryHasLinks(id string) bool {
 	return false
 }
 
-func (s *State) validateEntryPlanLine(month string, id *string, kind string) error {
+func (s *State) validateEntryPlanLine(month string, id *string, kind string, input EntryInput) error {
 	if !ValidID(*id) {
 		return Invalid("Plan line ID must be a UUID")
 	}
@@ -242,6 +242,34 @@ func (s *State) validateEntryPlanLine(month string, id *string, kind string) err
 		if line.ID == *id {
 			if line.Kind != kind {
 				return Invalid("Plan line kind is incompatible with this entry")
+			}
+			if line.AccountID != nil {
+				accountID := *line.AccountID
+				var matches bool
+				switch kind {
+				case "income":
+					matches = input.DestinationAccountID != nil && *input.DestinationAccountID == accountID
+				case "spending":
+					matches = input.SourceAccountID != nil && *input.SourceAccountID == accountID
+					if input.Kind == "refund" && input.RelatedEntryID != nil {
+						original := s.Entries[*input.RelatedEntryID]
+						matches = original.SourceAccountID != nil && *original.SourceAccountID == accountID
+					}
+				case "allocation":
+					matchedAccount := input.DestinationAccountID
+					if input.Kind == "allocation_withdrawal" {
+						matchedAccount = input.SourceAccountID
+					}
+					matches = matchedAccount != nil && *matchedAccount == accountID
+				case "funding_inflow", "funding_outflow":
+					matches = (input.SourceAccountID != nil && *input.SourceAccountID == accountID) || (input.DestinationAccountID != nil && *input.DestinationAccountID == accountID)
+					if s.Accounts[accountID].Kind == "credit_card" {
+						matches = input.Kind == "card_settlement" && input.DestinationAccountID != nil && *input.DestinationAccountID == accountID
+					}
+				}
+				if !matches {
+					return Invalid("Plan line account is incompatible with this entry")
+				}
 			}
 			return nil
 		}

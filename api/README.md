@@ -153,3 +153,15 @@ received zero differs from an explicitly completed zero-income line. Actual
 coverage remains provisional until reviewed/complete, while a numerically known
 forecast can still be shown. `savings_rate` is a decimal ratio string rounded to
 six decimal places, unavailable for nonpositive income or incomplete spending.
+
+Closed months retain `reviewed_card_ids`, captured by the server at close, so new
+cards and archival do not rewrite a completed review. Reopening explicitly uses
+the current inventory. Statement writes check both spending reporting month and
+obligation due month; revisions check old and new affected months. Every affected
+open month advances its version/revision. A plan line's optional account restricts
+which actuals may match it; a card funding plan accepts settlements to that card.
+Any nonzero signed estimated remainder remains pending until completed.
+
+A staged statement's `amount_due_minor` may be absent or null (unknown), but
+acceptance requires an explicitly supplied amount, including an explicit `"0"`.
+It is never defaulted to a zero payable.

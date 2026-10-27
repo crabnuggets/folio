@@ -152,6 +152,13 @@ func (s *State) UpdateAccount(id string, input AccountInput, expected int64) (Ac
 }
 
 func (s *State) accountReferenced(id string) bool {
+	for _, m := range s.Months {
+		for _, cardID := range m.ReviewedCardIDs {
+			if cardID == id {
+				return true
+			}
+		}
+	}
 	for _, e := range s.Entries {
 		if (e.SourceAccountID != nil && *e.SourceAccountID == id) || (e.DestinationAccountID != nil && *e.DestinationAccountID == id) {
 			return true

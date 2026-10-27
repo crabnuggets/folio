@@ -19384,6 +19384,12 @@
         "type": "object",
         "additionalProperties": false,
         "properties": {
+          "reviewed_card_ids": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UUID"
+            }
+          },
           "month": {
             "$ref": "#/components/schemas/MonthValue"
           },
@@ -19420,6 +19426,7 @@
           }
         },
         "required": [
+          "reviewed_card_ids",
           "month",
           "version",
           "revision",
@@ -19772,7 +19779,14 @@
             "type": "string"
           },
           "amount_due_minor": {
-            "$ref": "#/components/schemas/Money"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Money"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "minimum_due_minor": {
             "anyOf": [

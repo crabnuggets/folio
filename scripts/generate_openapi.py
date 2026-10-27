@@ -77,7 +77,7 @@ add("PlanLine", {"id": ID, "kind": ref("PlanKind"), "expected_minor": AMOUNT, "e
 add("PlanInput", {"lines": array(ref("PlanLine"))})
 add("Plan", {"version": VERSION, "lines": array(ref("PlanLine"))})
 add("Checklist", {"income_reviewed": BOOL, "cards_reviewed": BOOL, "expenses_reviewed": BOOL, "allocations_reviewed": BOOL, "no_statement_reasons": MAP_STR}, [], "All four assertions are required to be true at close. Missing statement is different from explicit account UUID→reason no-statement assertion.")
-add("Month", {"month": MONTH, "version": VERSION, "revision": {"type": "integer", "format": "int64", "minimum": 0}, "state": {"type": "string", "enum": ["open", "closed"]}, "checklist": ref("Checklist"), "closed_at": nullable(INSTANT)})
+add("Month", {"reviewed_card_ids": array(ID), "month": MONTH, "version": VERSION, "revision": {"type": "integer", "format": "int64", "minimum": 0}, "state": {"type": "string", "enum": ["open", "closed"]}, "checklist": ref("Checklist"), "closed_at": nullable(INSTANT)})
 add("MonthTransition", {"reason": S, "checklist": ref("Checklist")}, [], "Close requires the complete checklist. Reopen requires a nonblank reason; subsequent changes increase revision.")
 add("RecurrenceInput", {"kind": ref("PlanKind"), "expected_minor": AMOUNT, "start_month": MONTH, "end_month": nullable(MONTH), "description": S, "account_id": nullable(ID)}, ["kind", "expected_minor", "start_month", "description"], "Effective-dated expectation only, never a posting. End month is inclusive. Revisions preserve historical targets.")
 resource("Recurrence", "RecurrenceInput", {"supersedes_id": nullable(ID)})
@@ -94,6 +94,7 @@ for candidate, posted in [("DraftEntryCandidate", "EntryInput"), ("DraftStatemen
         else:
             properties[field] = nullable(S) if "anyOf" in schema else S
     add(candidate, properties, [], "Untrusted structured candidate. Missing strings may be empty on reads. Unknown/invalid dates, accounts and categories remain staged until acceptance enforces the posted-record contract. Monetary JSON must still be an integer string within signed 64-bit range.")
+SCHEMAS["DraftStatementCandidate"]["properties"]["amount_due_minor"] = nullable(AMOUNT)
 add("DraftInput", {"source_id": S, "external_id": S, "entry": nullable(ref("DraftEntryCandidate")), "statement": nullable(ref("DraftStatementCandidate")), "evidence": S}, ["source_id", "external_id", "evidence"], "Exactly one entry or statement candidate. Durable source+external identity prevents repeat observation from making another posting. Staging is allowed in closed months; acceptance applies all posting validation atomically.")
 resource("Draft", "DraftInput", {"state": {"type": "string", "enum": ["pending", "accepted", "rejected"]}, "accepted_record_id": nullable(ID), "rejection_reason": S})
 add("ReasonInput", {"reason": {"type": "string", "minLength": 1}})

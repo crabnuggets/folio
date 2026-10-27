@@ -13,9 +13,12 @@ func (s *State) GetMonth(month string) (Month, error) {
 		return Month{}, Invalid("Invalid reporting month")
 	}
 	if m, ok := s.Months[month]; ok {
+		if m.ReviewedCardIDs == nil {
+			m.ReviewedCardIDs = []string{}
+		}
 		return m, nil
 	}
-	return Month{Month: month, Version: 1, State: "open", Checklist: Checklist{NoStatementReasons: map[string]string{}}}, nil
+	return Month{Month: month, Version: 1, State: "open", ReviewedCardIDs: []string{}, Checklist: Checklist{NoStatementReasons: map[string]string{}}}, nil
 }
 func (s *State) GetPlan(month string) (Plan, error) {
 	if !ValidMonth(month) {
@@ -154,6 +157,13 @@ func (s *State) CloseMonth(month string, in MonthTransition, expected int64) (Mo
 	// and still yield provisional summaries after closing; closure does not invent data.
 	before := m
 	now := time.Now().UTC()
+	m.ReviewedCardIDs = []string{}
+	for _, id := range sortedKeys(s.Accounts) {
+		account := s.Accounts[id]
+		if account.Kind == "credit_card" && account.Active {
+			m.ReviewedCardIDs = append(m.ReviewedCardIDs, id)
+		}
+	}
 	m.Checklist = c
 	m.State = "closed"
 	m.ClosedAt = &now
