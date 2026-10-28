@@ -13,7 +13,8 @@ Prepared 2026-10-26. These documents distinguish accepted decisions from propose
 7. [Open questions and evidence](07-open-questions-and-evidence.md): unresolved decisions and research gates.
 8. [Spreadsheet mapping](08-spreadsheet-mapping.md): inspected source structure, reconciliation findings, and migration gates.
 9. [Hosting decision and comparison](09-hosting-recommendation.md): selected Render + Supabase services, verified limits, and deferred alternatives.
-10. [Platform ADR](../adr/0001-platform-and-delivery.md), [accounting ADR](../adr/0002-monthly-accounting.md), [funding-boundary ADR](../adr/0003-funding-boundary-and-reimbursements.md), and [accepted hosting ADR](../adr/0004-first-hosted-version.md).
+10. [Visual design and interaction](10-visual-design.md): confirmed appearance and monthly-review preferences, shared web/Android styling, and proposed implementation tokens.
+11. [Platform ADR](../adr/0001-platform-and-delivery.md), [accounting ADR](../adr/0002-monthly-accounting.md), [funding-boundary ADR](../adr/0003-funding-boundary-and-reimbursements.md), and [accepted hosting ADR](../adr/0004-first-hosted-version.md).
 
 ## Rules for implementing agents
 

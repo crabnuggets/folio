@@ -2,6 +2,7 @@
 
 ## Confirmed from the user
 
+- Visual direction (2026-10-28): bright, minimal, Apple-inspired polish with Revolut-inspired typography, figures, cards, navigation, and charts; mostly monochrome with ocean teal; selective glass on navigation/overlays and solid financial surfaces; generous spacing and details on demand for monthly use; consistent web/Android appearance with native Android navigation/gestures; restrained springs and smooth state changes. Exact font and token values remain proposed in the [design guide](10-visual-design.md).
 - Personal, single-user monthly finance tracking focused on the bigger picture.
 - Browser and Android clients, React preference, Go backend preference, and conventional Android development.
 - Third-party services must offer free tiers; development AI should not incur API charges.

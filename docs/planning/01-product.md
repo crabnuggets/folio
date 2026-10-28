@@ -51,6 +51,8 @@ Follow [the source mapping](08-spreadsheet-mapping.md). Include reimbursement/cl
 
 ## UX quality
 
+Follow the shared [visual design and interaction guide](10-visual-design.md) for web and native Android: a bright, calm monthly overview, predominantly monochrome surfaces with ocean-teal emphasis, selective glass on navigation/overlays, and restrained motion. Financial figures and tables use solid surfaces. Details are available on demand; essential review warnings remain visible.
+
 Use accessible labels, keyboard navigation, adequate contrast, large touch targets, localized currency/date formatting, and explicit minus signs. Charts supplement numeric tables. Never rely on color alone. Avoid technical model scores on the main dashboard; show “Needs review” and explain the missing field.
 
 ## Success measures

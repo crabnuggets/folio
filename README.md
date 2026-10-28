@@ -8,4 +8,6 @@ The first hosted version will use **Render Free** for the Go API and React front
 
 Start with the [implementation handoff](docs/planning/README.md). It links the product requirements, accounting rules, architecture, automation design, deployment options, and phased work plan.
 
+The [visual design guide](docs/planning/10-visual-design.md) defines the shared web and Android appearance: a bright monthly overview, ocean-teal accents, selective glass, and restrained motion.
+
 Shared terminology lives in [GLOSSARY.md](GLOSSARY.md); architectural decisions live in [docs/adr](docs/adr). Repository agent instructions remain in [AGENTS.md](AGENTS.md).
