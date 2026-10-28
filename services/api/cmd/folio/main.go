@@ -46,7 +46,11 @@ func run() error {
 		return err
 	}
 	defer db.Close()
-	server := &http.Server{Addr: cfg.Address, Handler: httpapi.New(db, cfg.OwnerID, middleware), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 32 << 10}
+	handler, err := httpapi.NewWithWebDistDir(db, cfg.OwnerID, middleware, cfg.WebDistDir)
+	if err != nil {
+		return err
+	}
+	server := &http.Server{Addr: cfg.Address, Handler: handler, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 32 << 10}
 	result := make(chan error, 1)
 	go func() { slog.Info("API listening", "address", cfg.Address); result <- server.ListenAndServe() }()
 	select {

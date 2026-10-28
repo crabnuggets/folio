@@ -15,6 +15,7 @@ type Config struct {
 	Address     string
 	DatabaseURL string
 	OwnerID     string
+	WebDistDir  string
 	Auth        auth.Config
 }
 
@@ -61,5 +62,12 @@ func FromEnv(get func(string) string) (Config, error) {
 	if _, err := auth.New(a); err != nil {
 		return Config{}, err
 	}
-	return Config{Address: ":" + port, DatabaseURL: databaseURL, OwnerID: owner, Auth: a}, nil
+	webDistDir := get("WEB_DIST_DIR")
+	if strings.TrimSpace(webDistDir) == "" {
+		webDistDir = ""
+	}
+	if strings.ContainsRune(webDistDir, '\x00') {
+		return Config{}, errors.New("WEB_DIST_DIR must be a valid filesystem path")
+	}
+	return Config{Address: ":" + port, DatabaseURL: databaseURL, OwnerID: owner, WebDistDir: webDistDir, Auth: a}, nil
 }

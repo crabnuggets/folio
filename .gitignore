@@ -36,3 +36,12 @@ go.work.sum
 /services/api/folio
 .venv/
 __pycache__/
+
+# Web dependencies, builds and local test artifacts
+/apps/web/node_modules/
+/apps/web/dist/
+/apps/web/*.tsbuildinfo
+/apps/web/playwright-report/
+/apps/web/test-results/
+/apps/web/.env.local
+/apps/web/.env.*.local

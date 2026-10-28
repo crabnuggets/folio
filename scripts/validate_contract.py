@@ -11,7 +11,7 @@ from openapi_spec_validator import validate
 
 ROOT = Path(__file__).resolve().parents[1]
 subprocess.run([sys.executable, str(ROOT / "scripts/generate_openapi.py"), "--check"], check=True)
-spec = json.loads((ROOT / "api/openapi.yaml").read_text())
+spec = json.loads((ROOT / "api/openapi.yaml").read_text(encoding="utf-8"))
 validate(spec)
 money = Draft202012Validator(spec["components"]["schemas"]["Money"])
 for value in ["0", "1", "-1", "9223372036854775807", "-9223372036854775808"]:
@@ -27,7 +27,7 @@ for op in operations:
     if op["x-implementation"] == "deferred":
         assert "501" in op["responses"], op["operationId"]
 for path in sorted((ROOT / "fixtures").glob("*.json")):
-    fixture = json.loads(path.read_text())
+    fixture = json.loads(path.read_text(encoding="utf-8"))
     assert fixture["schema_version"] == 1
     assert fixture["currency"] == "SGD"
     assert fixture["expected_summary"], path
