@@ -41,10 +41,10 @@ Coverage is split across complementary flows:
   reopen, real stale-version conflict and recovery, same-month funding boundary
   edits, claims and receipt matching, draft staging while closed and acceptance
   after reopen, downloaded export contents, plan matching, entry correction/void,
-  and focus return after successful dialog submission.
+  focus return after successful dialog submission, and fresh assertions/reasons when switching cached months.
 - `retry.spec.ts`: repeated submit, deliberately lost committed response, identical
   UUID/body/precondition and one posting; retained inline draft form locking;
-  authentication expiry and sticky uncertainty across a rejected retry/sign-in.
+  authentication expiry and sticky uncertainty across a rejected retry/sign-in; recovered payment creation followed by a real stale-link rejection, returning to review and linking the existing payment without duplicate cash.
 - `session.spec.ts`: production CSP boot, SPA/API/health routing, bearer rejection,
   logout, absent token persistence, offline/read-error recovery, keyboard modal
   navigation/focus return, and 320px reflow.

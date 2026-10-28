@@ -300,3 +300,32 @@ test('plan matching follows corrected and voided income without counting the ori
   await page.getByLabel('Show correction history', { exact: true }).check();
   await expect(page.getByRole('button', { name: `View entry Synthetic planned salary ${date}`, exact: true })).toHaveCount(2);
 });
+
+
+test('cached month switches require fresh close assertions and missing-statement reasons', async ({ page, backend }) => {
+  const card = await backend.post<'Account'>('/accounts', accountInput('Monthly review card', 'credit_card'));
+  await signIn(page);
+  await page.getByRole('link', { name: 'Plan & review', exact: true }).click();
+  const reviewMonth = page.getByLabel('Review month', { exact: true });
+  const switchMonth = async (value: string) => {
+    await reviewMonth.fill(value);
+    await expect(page.getByText(`Review ${value} before closing.`, { exact: false })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Close month', exact: true })).toBeEnabled();
+  };
+  // Visit both months before entering assertions so the switches reuse cached data.
+  await switchMonth('2026-11');
+  await switchMonth(month);
+  for (const label of ['Income reviewed', 'Cards reviewed', 'Major expenses reviewed', 'Allocations reviewed']) {
+    await page.getByRole('checkbox', { name: label, exact: false }).check();
+  }
+  await page.getByLabel(`No statement reason for ${card.alias}`, { exact: false }).fill('October-only review evidence');
+  await switchMonth('2026-11');
+  for (const label of ['Income reviewed', 'Cards reviewed', 'Major expenses reviewed', 'Allocations reviewed']) {
+    await expect(page.getByRole('checkbox', { name: label, exact: false })).not.toBeChecked();
+  }
+  await expect(page.getByLabel(`No statement reason for ${card.alias}`, { exact: false })).toHaveValue('');
+  await page.getByRole('button', { name: 'Close month', exact: true }).click();
+  await expect(page.getByText('Income reviewed is required.', { exact: true })).toBeVisible();
+  expect((await backend.get<'Month'>('/months/2026-11')).state).toBe('open');
+  expect((await backend.get<'Month'>(`/months/${month}`)).state).toBe('open');
+});

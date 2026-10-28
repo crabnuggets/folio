@@ -13,11 +13,11 @@ synthetic.
 | --- | --- |
 | Worked month through the browser | Accounts, income 5000, statement spending 1200 + 300, rent 1000 and allocation 800 produce Go spending 2500 and surplus 1700. |
 | Settlement and revision | UI payment of 1200 leaves spending at 2500; UI statement revision from 1200 to 1100 produces spending 2400 and surplus 1800. Payment and obligation linkage remain distinct. |
-| Review lifecycle | Checklist and explicit missing-statement reason permit close; posting controls lock; reopening records a reason and allows changes. |
+| Review lifecycle | Checklist and explicit missing-statement reason permit close; posting controls lock; reopening records a reason and allows changes. Cached month switches reset review assertions and missing-statement reasons. |
 | Unknown data | Missing statements and unknown cycle spending retain provisional/unknown figures rather than substituting zero. |
 | Corrections and planning | Plan-matched income changes from 1000 to 900 through a reasoned correction, then zero through void; only the active replacement contributes. History remains visible. |
 | Claims and drafts | UI claim/receipt matching reduces personal cost once; staged drafts remain outside totals, acceptance respects closed months, and downloaded JSON preserves records and draft history. |
-| Uncertain writes | Dropping a real committed response and retrying preserves the exact UUID key, body and If-Match and produces one posting. Retained inline forms lock; uncertainty survives a later 401 and renewed sign-in. |
+| Uncertain writes | Dropping a real committed response and retrying preserves the exact UUID key, body and If-Match and produces one posting. Retained inline forms lock; uncertainty survives a later 401 and renewed sign-in. Once a lost payment response is recovered, a definitive stale-link rejection permits returning to review and linking the existing payment without duplicate cash. |
 | Stale writes | A real concurrent account update produces 412; recovery controls remain inside the active modal and allow returning to review. |
 | Sessions and failures | Real auth rejects invalid/expired bearers; sign-out clears private UI, tokens are absent from persistent browser storage, and failed/offline reads recover. |
 | Responsive and keyboard interaction | Desktop 1440px, phone 390px and 320px reflow; labelled forms, modal keyboard containment, Escape and successful-save focus return. Wide tables retain horizontal scrolling without widening the phone viewport. |
@@ -28,6 +28,13 @@ label escaping the wide table's scrolling container. Positioning that container
 keeps the label inside its scrollable area. The original Save entry click timed
 out before the fix; the complete plan/correction/void browser flow passes after it,
 including an explicit page-overflow assertion.
+
+Review regressions also reproduce cached close assertions leaking from October into
+November and a recovered payment remaining locked after a real stale-link 412.
+Both fail before their fixes and pass on desktop and phone afterward. The close
+form is keyed by reporting month. Settlement uncertainty belongs to the active
+payment/link step; a recovered payment clears its uncertainty, while a lost link
+response remains uncertain across later rejected retries.
 
 ## Commands and results
 
@@ -42,8 +49,8 @@ npm.cmd run test:e2e
 ```
 
 - Generated API type drift and both TypeScript checks pass.
-- Client tests: **44 passed** across four files.
-- Browser suite: **35 passed, 1 intentionally skipped** across 36 configurations.
+- Client tests: **46 passed** across four files.
+- Browser suite: **39 passed, 1 intentionally skipped** across 40 configurations.
   The skipped desktop case duplicates the phone-only 320px test.
 - Browser startup runs `npm run build` and serves its output from Go, rather than
   testing against Vite. The production build passes.

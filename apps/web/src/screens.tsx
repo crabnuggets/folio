@@ -119,7 +119,7 @@ function StatementDetails({ statement }: { statement: S['Statement'] }) {
 }
 
 export function PlanReview() {
-  const { data, open, blocked } = useReview();
+  const { data, month, open, blocked } = useReview();
   const { money, account } = useDisplay();
   const closed = data.month.state === 'closed';
   return <><Section title="Expected versus actual" action={<button disabled={blocked || closed} onClick={() => open('Add plan line', <PlanLineForm />)}>Add plan line</button>}><p className="quiet">Recognized spending and funding expectations are separate. Only matched actuals replace an estimate. A recurrence or plan is never evidence of payment.</p>
@@ -128,7 +128,7 @@ export function PlanReview() {
       return <tr key={line.id}><th scope="row">{line.description || titleCase(line.kind)}<small>{titleCase(line.kind)}{line.account_id && ` · ${account(line.account_id)}`}</small></th><td className="numeric">{money(line.expected_minor)}</td><td className="numeric">{money(actual?.actual_minor)}</td><td className="numeric">{money(actual?.remaining_minor)}</td><td className="numeric">{money(actual?.forecast_minor)}</td><td><button disabled={blocked || closed} onClick={() => open('Edit plan line', <PlanLineForm original={line} />)}>Edit expectation<span className="sr-only"> {line.description}</span></button><small>{line.complete ? 'Complete' : 'Pending'}</small></td></tr>;
     })}</tbody></table></div> : <Empty>No expectations yet. Add expected salary, spending, allocations and funding commitments; then link confirmed entries to them.</Empty>}
     <dl className="metric-grid compact"><Metric label="Projected funding remainder" value={money(data.summary.projected_funding_remainder_minor)} /><Metric label="Projected surplus" value={money(data.summary.projected_surplus_minor)} /></dl>
-  </Section><Section title="Coverage and monthly review"><MissingItems /><div className="divider" />{closed ? <><p>Closed {data.month.closed_at ? new Date(data.month.closed_at).toLocaleString() : ''} · Revision {data.month.revision}.</p><p>Closing records your review assertion. Unknown statement spending remains unknown.</p><button disabled={blocked} onClick={() => open('Reopen month', <ReopenMonth />)}>Reopen month</button></> : <CloseMonth />}</Section></>;
+  </Section><Section title="Coverage and monthly review"><MissingItems /><div className="divider" />{closed ? <><p>Closed {data.month.closed_at ? new Date(data.month.closed_at).toLocaleString() : ''} · Revision {data.month.revision}.</p><p>Closing records your review assertion. Unknown statement spending remains unknown.</p><button disabled={blocked} onClick={() => open('Reopen month', <ReopenMonth />)}>Reopen month</button></> : <CloseMonth key={month} />}</Section></>;
 }
 
 function CloseMonth() {

@@ -121,7 +121,7 @@ function ReviewSession({ api, month, onMonth, destination, pending, hasPending, 
       await item.task.run();
       await refresh();
       updatePending(null); setModal(null); setNotice(`${item.label} saved.`);
-    } catch (failure) { updatePending({ ...item, running: false, error: failure, uncertain: item.uncertain || isUncertain(failure) }); throw failure; }
+    } catch (failure) { updatePending({ ...item, running: false, error: failure, uncertain: item.task.uncertain ?? (item.uncertain || isUncertain(failure)) }); throw failure; }
     finally { busy.current = false; }
   };
   const perform = async (label: string, task: Task) => {

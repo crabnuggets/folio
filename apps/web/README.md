@@ -77,12 +77,14 @@ Every action captures one immutable body, UUID idempotency key and (when require
 the API client automatically retries financial mutations. After a timeout,
 disconnect, invalid success body or server failure, use **Retry same action**.
 The exact original key/body/precondition is retained; the form is locked until the
-outcome is recovered. An uncertain outcome stays uncertain across later rejected
+outcome is recovered. An unfinished step's uncertain outcome stays uncertain across later rejected
 retries and session expiry; sign in again and recover the original action. Recovery controls are inside the active native dialog, so
 they remain keyboard-accessible while the rest of the page is inert.
 
 Settlement retains each successful payment ID before linking. A failed or stale
-link never starts another payment on retry. If a confirmed conflict requires
+link never starts another payment on retry. Once the payment result is recovered,
+a definitive link rejection permits returning to review and linking that existing
+payment against the current statement. A lost link response still requires recovery. If a confirmed conflict requires
 returning to review, the payment remains in Records; reopen **Record payment** and
 choose **Link an existing recorded payment**. Do not enter another payment.
 

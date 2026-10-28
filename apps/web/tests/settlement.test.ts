@@ -41,3 +41,37 @@ it('leaves a committed cash payment recoverable when statement concurrency rejec
   expect(workflow.paymentId).toBe('recoverable'); await expect(workflow.run()).rejects.toMatchObject({ status: 412 });
   expect(transport.mock.calls.filter(call => String(call[0]).endsWith('/entries'))).toHaveLength(1);
 });
+
+
+it('clears resolved payment uncertainty when recovered cash reaches a definitively rejected link', async () => {
+  const transport = vi.fn<typeof fetch>()
+    .mockRejectedValueOnce(new TypeError('committed payment response lost'))
+    .mockResolvedValueOnce(json({ id: 'recovered-payment' }))
+    .mockResolvedValueOnce(json({ error: { code: 'STALE_VERSION', message: 'stale' } }, 412));
+  const api = new ApiClient(transport); api.setToken('owner');
+  const workflow = settlementWorkflow(api, statement, '120000', payment);
+  await expect(workflow.run()).rejects.toThrow('outcome is unknown');
+  expect(workflow).toHaveProperty('uncertain', true);
+  await expect(workflow.run()).rejects.toMatchObject({ status: 412 });
+  expect(workflow).toHaveProperty('paymentId', 'recovered-payment');
+  expect(workflow).toHaveProperty('uncertain', false);
+  expect(transport.mock.calls[1][1]?.headers).toEqual(transport.mock.calls[0][1]?.headers);
+});
+
+it('keeps a lost link outcome uncertain across a later definitive rejection', async () => {
+  const transport = vi.fn<typeof fetch>()
+    .mockResolvedValueOnce(json({ id: 'retained-payment' }))
+    .mockRejectedValueOnce(new TypeError('committed link response lost'))
+    .mockResolvedValueOnce(json({ error: { code: 'STALE_VERSION', message: 'stale' } }, 412))
+    .mockResolvedValueOnce(json({ id: 'recovered-settlement' }));
+  const api = new ApiClient(transport); api.setToken('owner');
+  const workflow = settlementWorkflow(api, statement, '120000', payment);
+  await expect(workflow.run()).rejects.toThrow('outcome is unknown');
+  await expect(workflow.run()).rejects.toMatchObject({ status: 412 });
+  expect(workflow).toHaveProperty('uncertain', true);
+  await workflow.run();
+  expect(workflow).toHaveProperty('uncertain', false);
+  expect(transport.mock.calls.filter(call => String(call[0]).endsWith('/entries'))).toHaveLength(1);
+  expect(transport.mock.calls[2][1]?.headers).toEqual(transport.mock.calls[1][1]?.headers);
+  expect(transport.mock.calls[3][1]?.headers).toEqual(transport.mock.calls[1][1]?.headers);
+});

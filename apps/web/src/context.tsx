@@ -9,7 +9,8 @@ export type ReviewData = {
   claims: S['Claim'][]; drafts: S['Draft'][]; snapshots: S['Snapshot'][]; audit: S['Audit'][];
   plan: S['Plan']; month: S['Month']; summary: S['Summary'];
 };
-export type Task = { run(): Promise<unknown>; paymentId?: string; body?: string };
+/** Multi-step tasks may report current outcome certainty; ordinary commands use sticky recovery. */
+export type Task = { run(): Promise<unknown>; readonly uncertain?: boolean; paymentId?: string; body?: string };
 export type ReviewContextValue = {
   api: ApiClient; data: ReviewData; month: string; blocked: boolean;
   open(title: string, content: ReactNode): void;

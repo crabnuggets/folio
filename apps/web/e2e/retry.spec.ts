@@ -1,4 +1,4 @@
-import { test, expect, bearer, month, date, accountInput, signIn, noHorizontalOverflow } from './fixtures';
+import { test, expect, bearer, month, date, accountInput, statementInput, signIn, noHorizontalOverflow } from './fixtures';
 
 test('repeated submit and a lost committed response recover with one posting and the same retry identity', async ({ page, backend }) => {
   const funding = await backend.post<'Account'>('/accounts', accountInput('Funding'));
@@ -134,4 +134,54 @@ test('a lost committed response remains uncertain across a rejected retry and re
   expect(attempts[1]).toEqual(attempts[0]);
   expect(attempts[2]).toEqual(attempts[0]);
   expect((await backend.get<'EntryPage'>('/entries')).items).toHaveLength(1);
+});
+
+
+test('a recovered payment with stale linkage returns to review and links the existing cash movement', async ({ page, backend }) => {
+  const funding = await backend.post<'Account'>('/accounts', accountInput('Settlement funding'));
+  const card = await backend.post<'Account'>('/accounts', accountInput('Settlement card', 'credit_card'));
+  const statement = await backend.post<'Statement'>('/statements', statementInput(card.id, '120000'));
+  await signIn(page);
+  await page.getByRole('link', { name: 'Statements', exact: true }).click();
+  await page.getByRole('button', { name: `Record payment ${card.alias}`, exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByLabel('Paying account', { exact: false }).selectOption(funding.id);
+  await dialog.getByLabel('Payment date', { exact: false }).fill(date);
+  const attempts: { key: string; body: string | null }[] = [];
+  await page.route('**/api/v1/entries', async route => {
+    const request = route.request();
+    if (request.method() !== 'POST') return route.continue();
+    attempts.push({ key: request.headers()['idempotency-key'], body: request.postData() });
+    const response = await route.fetch();
+    expect(response.status()).toBe(201);
+    if (attempts.length === 1) await route.abort('connectionfailed');
+    else await route.fulfill({ response });
+  });
+  await dialog.getByRole('button', { name: 'Save payment', exact: true }).click();
+  const retry = dialog.getByRole('button', { name: 'Retry same action', exact: true });
+  await expect(retry).toBeVisible();
+  await expect(dialog.getByRole('button', { name: 'Return to review', exact: true })).toHaveCount(0);
+  const revised = await backend.post<'Statement'>(`/statements/${statement.id}/revisions`, {
+    reason: 'Concurrent statement evidence update', replacement: statementInput(card.id, '120000'),
+  }, { version: statement.version });
+  const rejectedLink = page.waitForResponse(response => response.url().endsWith(`/statements/${statement.id}/settlements`) && response.request().method() === 'POST');
+  await retry.click();
+  expect((await rejectedLink).status()).toBe(412);
+  const returnToReview = dialog.getByRole('button', { name: 'Return to review', exact: true });
+  await expect(returnToReview).toBeVisible();
+  expect(attempts).toHaveLength(2);
+  expect(attempts[1]).toEqual(attempts[0]);
+  const payments = (await backend.get<'EntryPage'>('/entries')).items;
+  expect(payments).toHaveLength(1);
+  await expect(dialog).toContainText(payments[0].id);
+  await returnToReview.click();
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByRole('button', { name: `Record payment ${card.alias}`, exact: true })).toBeEnabled();
+  await page.getByRole('button', { name: `Record payment ${card.alias}`, exact: true }).click();
+  await dialog.getByLabel('Payment source', { exact: false }).selectOption('existing');
+  await dialog.getByLabel('Existing payment', { exact: false }).selectOption(payments[0].id);
+  await dialog.getByRole('button', { name: 'Save payment', exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  expect((await backend.get<'EntryPage'>('/entries')).items).toHaveLength(1);
+  expect((await backend.get<'Summary'>(`/months/${month}/summary`)).statements.find(item => item.statement_id === revised.id)?.remaining_minor).toBe('0');
 });
