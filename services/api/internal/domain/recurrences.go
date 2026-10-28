@@ -25,6 +25,7 @@ func (s *State) validateRecurrence(in RecurrenceInput) error {
 	}
 	return nil
 }
+
 // CreateRecurrence stores and audits an expectation template without creating plan
 // lines or postings. It propagates validation and account errors and returns
 // MONTH_CLOSED if the inclusive interval overlaps a closed review.
@@ -42,6 +43,7 @@ func (s *State) CreateRecurrence(in RecurrenceInput) (Recurrence, error) {
 	s.Audit("recurrence.created", r.ID, "")
 	return r, nil
 }
+
 // ReviseRecurrence returns a new template and ends its predecessor the month before
 // the new start, advancing the predecessor's version and auditing the revision.
 // It rejects missing or stale predecessors, invalid inputs or start months,
@@ -70,7 +72,7 @@ func (s *State) ReviseRecurrence(id string, in RecurrenceInput, expected int64) 
 		return Recurrence{}, Invalid("Revision must start within the predecessor's effective interval")
 	}
 	for month, m := range s.Months {
-		if m.State == "closed" && month >= in.StartMonth && (old.EndMonth == nil || month <= *old.EndMonth) {
+		if m.State == "closed" && month >= in.StartMonth && (old.EndMonth == nil || month <= *old.EndMonth || in.EndMonth == nil || month <= *in.EndMonth) {
 			return Recurrence{}, Fail(409, "MONTH_CLOSED", "Recurrence revisions cannot restate closed months")
 		}
 	}

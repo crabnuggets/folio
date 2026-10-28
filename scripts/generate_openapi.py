@@ -51,7 +51,7 @@ BOOL = {"type": "boolean"}
 VERSION = {"type": "integer", "minimum": 1, "format": "int64"}
 DATE = {"type": "string", "format": "date", "description": "ISO local calendar date, not a UTC instant."}
 INSTANT = {"type": "string", "format": "date-time"}
-MONEY = {"type": "string", "pattern": r"^-?(0|[1-9][0-9]*)$", "description": "Canonical signed 64-bit decimal minor-unit integer string. Values outside -9223372036854775808..9223372036854775807 are invalid. Currency exponent comes from settings.", "examples": ["500000", "0", "-10000"]}
+MONEY = {"type": "string", "pattern": r"^(0|-?[1-9][0-9]*)$", "description": "Canonical signed 64-bit decimal minor-unit integer string. Values outside -9223372036854775808..9223372036854775807 are invalid. Currency exponent comes from settings.", "examples": ["500000", "0", "-10000"]}
 SCHEMAS["Money"] = MONEY
 SCHEMAS["UUID"] = {"type": "string", "format": "uuid"}
 SCHEMAS["MonthValue"] = {"type": "string", "pattern": r"^(19[0-9]{2}|[2-9][0-9]{3})-(0[1-9]|1[0-2])$", "examples": ["2026-10"]}
@@ -77,8 +77,8 @@ resource("Statement", "StatementInput", {"active": BOOL, "payable_active": BOOL,
 add("StatementRevision", {"reason": S, "replacement": ref("StatementInput")})
 add("SettlementInput", {"entry_id": ID, "amount_minor": AMOUNT}, description="Positive allocation of an existing card_settlement entry after statement cutoff. Does not create another cash entry. Sum across links cannot exceed payment amount.")
 resource("Settlement", "SettlementInput", {"statement_id": ID})
-add("ObligationAdjustmentInput", {"amount_minor": AMOUNT, "effective_date": DATE, "reason": S, "refund_entry_id": nullable(ID)}, ["amount_minor", "effective_date", "reason"], "Positive obligation credit after cutoff; linked refund identity cannot be used twice. Does not independently change recognized spending.")
-resource("ObligationAdjustment", "ObligationAdjustmentInput", {"statement_id": ID})
+add("ObligationAdjustmentInput", {"amount_minor": AMOUNT, "effective_date": DATE, "reason": S, "refund_entry_id": {"type": "null", "description": "Reserved for future card-associated refunds. Current cash refunds relate only to direct expenses and cannot credit card obligations."}}, ["amount_minor", "effective_date", "reason"], "Positive explicit obligation credit after cutoff. Cash refund entry links are rejected because they have no statement-card association. Does not independently change recognized spending.")
+resource("ObligationAdjustment", "ObligationAdjustmentInput", {"statement_id": ID, "refund_entry_id": nullable(ID)})
 add("SnapshotInput", {"account_id": ID, "amount_minor": AMOUNT, "currency": CURRENCY, "observed_at": INSTANT, "source": S}, ["account_id", "amount_minor", "currency", "observed_at"], "Dated observation, never an inferred balance from partial transactions.")
 resource("Snapshot", "SnapshotInput")
 add("ClaimInput", {"amount_minor": AMOUNT, "currency": CURRENCY, "expense_entry_id": nullable(ID), "statement_id": nullable(ID), "expected_receipt_date": nullable(DATE), "description": S, "state": {"type": "string", "enum": ["pending", "partially_received", "received", "disputed", "waived"]}}, ["amount_minor", "currency", "description"], "Pending claim is never received cash. At most one recognized cost link. Received state is derived from confirmed receipt matches; partial/received cannot be fabricated.")

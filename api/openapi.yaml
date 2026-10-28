@@ -17979,7 +17979,7 @@
     "schemas": {
       "Money": {
         "type": "string",
-        "pattern": "^-?(0|[1-9][0-9]*)$",
+        "pattern": "^(0|-?[1-9][0-9]*)$",
         "description": "Canonical signed 64-bit decimal minor-unit integer string. Values outside -9223372036854775808..9223372036854775807 are invalid. Currency exponent comes from settings.",
         "examples": [
           "500000",
@@ -18881,14 +18881,8 @@
             "type": "string"
           },
           "refund_entry_id": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/UUID"
-              },
-              {
-                "type": "null"
-              }
-            ]
+            "type": "null",
+            "description": "Reserved for future card-associated refunds. Current cash refunds relate only to direct expenses and cannot credit card obligations."
           }
         },
         "required": [
@@ -18896,7 +18890,7 @@
           "effective_date",
           "reason"
         ],
-        "description": "Positive obligation credit after cutoff; linked refund identity cannot be used twice. Does not independently change recognized spending."
+        "description": "Positive explicit obligation credit after cutoff. Cash refund entry links are rejected because they have no statement-card association. Does not independently change recognized spending."
       },
       "ObligationAdjustment": {
         "type": "object",

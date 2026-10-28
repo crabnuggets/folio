@@ -24,6 +24,7 @@ type Memory struct {
 func NewMemory() *Memory {
 	return &Memory{states: make(map[string]*domain.State), retries: make(map[string]map[string]retryRecord)}
 }
+
 // cloneState returns a detached copy, or a new default state for nil input.
 // Serialization failures become DEPENDENCY_UNAVAILABLE errors.
 func cloneState(state *domain.State) (*domain.State, error) {
@@ -40,12 +41,15 @@ func cloneState(state *domain.State) (*domain.State, error) {
 	}
 	return result, nil
 }
+
 // cloneResult copies the response body so callers cannot mutate a cached retry.
 func cloneResult(r Result) Result { r.Body = append(json.RawMessage(nil), r.Body...); return r }
+
 // unavailable constructs a public 503 storage error without dependency details.
 func unavailable() error {
 	return domain.Fail(503, "DEPENDENCY_UNAVAILABLE", "Financial storage is temporarily unavailable")
 }
+
 // validateOwner returns FORBIDDEN unless owner is a UUID-shaped identity.
 func validateOwner(owner string) error {
 	if !domain.ValidID(owner) {
@@ -53,6 +57,7 @@ func validateOwner(owner string) error {
 	}
 	return nil
 }
+
 // Read returns a detached owner state, defaulting to a new state when absent.
 // Invalid owners return FORBIDDEN; canceled contexts and serialization failures
 // return DEPENDENCY_UNAVAILABLE.
@@ -67,6 +72,7 @@ func (m *Memory) Read(ctx context.Context, owner string) (*domain.State, error) 
 	defer m.mu.Unlock()
 	return cloneState(m.states[owner])
 }
+
 // Execute serializes commands and commits detached state and response copies together.
 // key is an owner-scoped UUID and hash identifies the request. A matching retry
 // returns the stored result with true without calling fn; new commits return false.
@@ -115,6 +121,7 @@ func (m *Memory) Execute(ctx context.Context, owner, key, hash string, fn func(*
 	m.retries[owner][key] = retryRecord{hash, cloneResult(result)}
 	return cloneResult(result), false, nil
 }
+
 // Ping returns DEPENDENCY_UNAVAILABLE if the context is canceled, otherwise nil.
 func (m *Memory) Ping(ctx context.Context) error {
 	if ctx.Err() != nil {
@@ -122,5 +129,6 @@ func (m *Memory) Ping(ctx context.Context) error {
 	}
 	return nil
 }
+
 // Close is a no-op; the in-memory store has no external resources to release.
 func (m *Memory) Close() {}

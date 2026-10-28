@@ -14,15 +14,16 @@ type Money int64
 
 // MarshalJSON encodes minor units as a decimal integer string to preserve precision.
 func (m Money) MarshalJSON() ([]byte, error) { return json.Marshal(strconv.FormatInt(int64(m), 10)) }
+
 // UnmarshalJSON accepts a decimal integer string within the signed 64-bit range,
-// allowing a leading minus but no plus or leading zeros except zero itself.
+// allowing a leading minus for nonzero values, but no plus or leading zeros.
 // Invalid input returns an error without changing m.
 func (m *Money) UnmarshalJSON(b []byte) error {
 	var v string
 	if err := json.Unmarshal(b, &v); err != nil {
 		return fmt.Errorf("amount must be an integer string")
 	}
-	if !regexp.MustCompile(`^-?(0|[1-9][0-9]*)$`).MatchString(v) {
+	if !regexp.MustCompile(`^(0|-?[1-9][0-9]*)$`).MatchString(v) {
 		return fmt.Errorf("amount must be a canonical integer string")
 	}
 	n, e := strconv.ParseInt(v, 10, 64)
@@ -42,14 +43,18 @@ type Error struct {
 
 // Error returns the public error message.
 func (e *Error) Error() string { return e.Message }
+
 // Fail constructs a domain error with the supplied HTTP status and public details.
 func Fail(status int, code, message string) error {
 	return &Error{status, code, message, map[string]string{}}
 }
+
 // Invalid constructs a 422 VALIDATION_FAILED error with the public message.
 func Invalid(message string) error { return Fail(422, "VALIDATION_FAILED", message) }
+
 // NotFound constructs a 404 error without identifying an inaccessible record.
-func NotFound() error              { return Fail(404, "NOT_FOUND", "Record not found") }
+func NotFound() error { return Fail(404, "NOT_FOUND", "Record not found") }
+
 // CheckVersion returns a 412 STALE_VERSION error unless actual equals expected.
 func CheckVersion(actual, expected int64) error {
 	if actual != expected {
@@ -57,8 +62,10 @@ func CheckVersion(actual, expected int64) error {
 	}
 	return nil
 }
+
 // NewID returns a random version 4 UUID and panics if secure randomness is unavailable.
 func NewID() string { return fmt.Sprintf("%s", uuidBytes()) }
+
 // uuidBytes returns a formatted version 4 UUID, panicking if random generation fails.
 func uuidBytes() string {
 	var b [16]byte
@@ -69,15 +76,18 @@ func uuidBytes() string {
 	b[8] = (b[8] & 63) | 128
 	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
 }
+
 // ValidID accepts a UUID-shaped hexadecimal string with either letter case.
 func ValidID(id string) bool {
 	return regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`).MatchString(id)
 }
+
 // ValidMonth accepts a YYYY-MM month with a year from 1900 through 9999.
 func ValidMonth(month string) bool {
 	t, e := time.Parse("2006-01", month)
 	return e == nil && t.Year() >= 1900 && t.Year() <= 9999 && t.Format("2006-01") == month
 }
+
 // ValidDate accepts a real YYYY-MM-DD calendar date from 1900 through 9999.
 func ValidDate(date string) bool {
 	t, e := time.Parse("2006-01-02", date)
@@ -92,7 +102,8 @@ type Meta struct {
 }
 
 // NewMeta creates version 1 metadata with a random ID and equal UTC timestamps.
-func NewMeta() Meta    { now := time.Now().UTC(); return Meta{NewID(), 1, now, now} }
+func NewMeta() Meta { now := time.Now().UTC(); return Meta{NewID(), 1, now, now} }
+
 // Touch advances the version and updates the modification timestamp in UTC.
 func (m *Meta) Touch() { m.Version++; m.UpdatedAt = time.Now().UTC() }
 
@@ -357,10 +368,12 @@ type State struct {
 func NewState() *State {
 	return &State{Settings: Settings{1, "SGD", 2, "Asia/Singapore"}, Accounts: map[string]Account{}, Entries: map[string]Entry{}, Statements: map[string]Statement{}, Settlements: map[string]Settlement{}, ObligationAdjustments: map[string]ObligationAdjustment{}, Snapshots: map[string]Snapshot{}, Claims: map[string]Claim{}, ReceiptMatches: map[string]ReceiptMatch{}, Plans: map[string]Plan{}, Months: map[string]Month{}, Recurrences: map[string]Recurrence{}, Periods: map[string]Period{}, Drafts: map[string]Draft{}, AuditEvents: []Audit{}, LegacySummaries: []LegacySummary{}}
 }
+
 // Audit appends an event with a new identity and the current UTC timestamp.
 func (s *State) Audit(action, id, reason string) {
 	s.AuditEvents = append(s.AuditEvents, Audit{ID: NewID(), Action: action, EntityID: id, Reason: reason, At: time.Now().UTC()})
 }
+
 // EnsureOpen rejects invalid months and returns MONTH_CLOSED for closed months.
 // A valid month without a stored review is treated as open.
 func (s *State) EnsureOpen(month string) error {
@@ -372,6 +385,7 @@ func (s *State) EnsureOpen(month string) error {
 	}
 	return nil
 }
+
 // BumpMonth advances a month's version and revision, creating an open review if absent.
 // Callers must validate month and check that it is open before financial mutations.
 func (s *State) BumpMonth(month string) {

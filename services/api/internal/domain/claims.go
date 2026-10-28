@@ -49,6 +49,7 @@ func (s *State) validateClaim(in ClaimInput) (ClaimInput, error) {
 	}
 	return in, nil
 }
+
 // CreateClaim stores and audits an expected reimbursement without posting cash,
 // advancing its anchor month when dated or linked. It propagates validation and
 // closed-anchor-month errors and rejects receipt states without confirmed matches.
@@ -71,6 +72,7 @@ func (s *State) CreateClaim(in ClaimInput) (Claim, error) {
 	s.bumpClaimMonths(claim)
 	return claim, nil
 }
+
 // claimMatchedAmount totals receipt allocations in minor units, including matches
 // whose recognized-cost recovery has not yet been classified.
 func (s *State) claimMatchedAmount(id string) *big.Int {
@@ -97,6 +99,7 @@ func (s *State) ClaimMonth(claim Claim) string {
 	}
 	return ""
 }
+
 // bumpClaimMonths advances the claim's anchor month when it has one.
 func (s *State) bumpClaimMonths(claim Claim) {
 	if month := s.ClaimMonth(claim); month != "" {

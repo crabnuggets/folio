@@ -11,8 +11,10 @@ type summarySum struct{ n big.Int }
 
 // add accumulates minor units without limiting the intermediate total to int64.
 func (a *summarySum) add(v Money) { a.n.Add(&a.n, big.NewInt(int64(v))) }
+
 // sub subtracts minor units without limiting the intermediate total to int64.
 func (a *summarySum) sub(v Money) { a.n.Sub(&a.n, big.NewInt(int64(v))) }
+
 // value returns the minor-unit total or a validation error if it exceeds int64.
 func (a *summarySum) value() (Money, error) {
 	if !a.n.IsInt64() {
@@ -20,6 +22,7 @@ func (a *summarySum) value() (Money, error) {
 	}
 	return Money(a.n.Int64()), nil
 }
+
 // summaryMoney sums minor units, rejecting only a final total outside int64.
 func summaryMoney(values ...Money) (Money, error) {
 	var a summarySum
@@ -28,6 +31,7 @@ func summaryMoney(values ...Money) (Money, error) {
 	}
 	return a.value()
 }
+
 // summarySubtract returns a minus b in minor units, or a validation error on overflow.
 func summarySubtract(a, b Money) (Money, error) {
 	var sum summarySum
@@ -35,6 +39,7 @@ func summarySubtract(a, b Money) (Money, error) {
 	sum.sub(b)
 	return sum.value()
 }
+
 // summaryPointer makes a known minor-unit amount available as an optional value.
 func summaryPointer(v Money) *Money { return &v }
 

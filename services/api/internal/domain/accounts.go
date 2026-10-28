@@ -124,7 +124,8 @@ func (s *State) FundingIncluded(accountID, month string) bool {
 // UpdateAccount replaces and audits an account at the expected version.
 // It returns lookup, version, and validation errors, ACCOUNT_REFERENCED for kind
 // changes to referenced accounts, or BOUNDARY_RESTATEMENT_REQUIRED when funding
-// membership changes in a month with recorded entries, statements, or a closed review.
+// membership changes in a month with entries or statements referencing this account,
+// or a closed review.
 func (s *State) UpdateAccount(id string, input AccountInput, expected int64) (Account, error) {
 	old, ok := s.Accounts[id]
 	if !ok {
@@ -145,11 +146,17 @@ func (s *State) UpdateAccount(id string, input AccountInput, expected int64) (Ac
 		return Account{}, Fail(409, "ACCOUNT_REFERENCED", "Referenced account kind cannot change")
 	}
 	for _, entry := range s.Entries {
+		if (entry.SourceAccountID == nil || *entry.SourceAccountID != id) && (entry.DestinationAccountID == nil || *entry.DestinationAccountID != id) {
+			continue
+		}
 		if boundaryIncluded(old.FundingBoundary, entry.ReportingMonth) != boundaryIncluded(input.FundingBoundary, entry.ReportingMonth) {
 			return Account{}, Fail(409, "BOUNDARY_RESTATEMENT_REQUIRED", "Funding-boundary changes cannot restate recorded history")
 		}
 	}
 	for _, statement := range s.Statements {
+		if statement.AccountID != id {
+			continue
+		}
 		if boundaryIncluded(old.FundingBoundary, statement.ReportingMonth) != boundaryIncluded(input.FundingBoundary, statement.ReportingMonth) {
 			return Account{}, Fail(409, "BOUNDARY_RESTATEMENT_REQUIRED", "Funding-boundary changes cannot restate recorded statement history")
 		}

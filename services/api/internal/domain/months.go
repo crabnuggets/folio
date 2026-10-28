@@ -22,6 +22,7 @@ func (s *State) GetMonth(month string) (Month, error) {
 	}
 	return Month{Month: month, Version: 1, State: "open", ReviewedCardIDs: []string{}, Checklist: Checklist{NoStatementReasons: map[string]string{}}}, nil
 }
+
 // GetPlan returns a stored plan or an unstored empty plan at version 1.
 // Invalid YYYY-MM months return a validation error.
 func (s *State) GetPlan(month string) (Plan, error) {
@@ -33,6 +34,7 @@ func (s *State) GetPlan(month string) (Plan, error) {
 	}
 	return Plan{Version: 1, Lines: []PlanLine{}}, nil
 }
+
 // PutPlan replaces and audits an open month's plan at the expected plan version.
 // It advances the plan and month versions and rejects invalid lines or recurrence
 // links, missing references, closed months, stale versions, and removal or
@@ -125,6 +127,7 @@ func (s *State) PutPlan(month string, in PlanInput, expected int64) (Plan, error
 	s.AuditChange("plan.updated", month, "", old, p)
 	return p, nil
 }
+
 // sameOptionalString treats two absent values as equal and otherwise compares strings.
 func sameOptionalString(a, b *string) bool {
 	return a == nil && b == nil || a != nil && b != nil && *a == *b
@@ -186,6 +189,7 @@ func (s *State) CloseMonth(month string, in MonthTransition, expected int64) (Mo
 	s.AuditChange("month.closed", month, in.Reason, before, m)
 	return m, nil
 }
+
 // ReopenMonth clears a closed month's close time, advances its version and revision,
 // and audits the supplied reason. It rejects invalid months, stale month versions,
 // already open months, and blank reasons; existing review assertions are retained.

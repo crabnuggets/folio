@@ -66,6 +66,7 @@ func NewPostgres(ctx context.Context, url string) (*Postgres, error) {
 	}
 	return p, nil
 }
+
 // begin opens a transaction with the owner identity set for row-level security.
 // Invalid owners return FORBIDDEN; database failures become DEPENDENCY_UNAVAILABLE.
 // The caller must commit or roll back a successful transaction.
@@ -83,6 +84,7 @@ func (p *Postgres) begin(ctx context.Context, owner string) (pgx.Tx, error) {
 	}
 	return tx, nil
 }
+
 // readState loads the owner's aggregate or returns a new default state when absent.
 // Query and JSON decoding failures become DEPENDENCY_UNAVAILABLE.
 func readState(ctx context.Context, tx pgx.Tx, owner string) (*domain.State, error) {
@@ -100,6 +102,7 @@ func readState(ctx context.Context, tx pgx.Tx, owner string) (*domain.State, err
 	}
 	return state, nil
 }
+
 // Read loads an owner state without persisting defaults for a missing aggregate.
 // Invalid owners return FORBIDDEN; database and decoding errors become
 // DEPENDENCY_UNAVAILABLE.
@@ -111,6 +114,7 @@ func (p *Postgres) Read(ctx context.Context, owner string) (*domain.State, error
 	defer tx.Rollback(context.Background())
 	return readState(ctx, tx, owner)
 }
+
 // Execute serializes owner commands and atomically commits their state and response.
 // key is an owner-scoped UUID and hash identifies the request. Matching retries
 // return the stored result with true without calling fn; new commits return false.
@@ -175,6 +179,7 @@ func (p *Postgres) Execute(ctx context.Context, owner, key, hash string, fn func
 	}
 	return result, false, nil
 }
+
 // Ping checks database connectivity, converting failures to DEPENDENCY_UNAVAILABLE.
 func (p *Postgres) Ping(ctx context.Context) error {
 	if p.pool.Ping(ctx) != nil {
@@ -182,5 +187,6 @@ func (p *Postgres) Ping(ctx context.Context) error {
 	}
 	return nil
 }
+
 // Close releases the connection pool.
 func (p *Postgres) Close() { p.pool.Close() }

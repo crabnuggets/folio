@@ -20,6 +20,7 @@ type Config struct {
 
 // Load reads configuration from process environment variables, returning FromEnv errors.
 func Load() (Config, error) { return FromEnv(os.Getenv) }
+
 // FromEnv reads named environment variables through get, defaulting to development,
 // port 8080, and JWT authentication. It validates owner, database URL, port, and
 // authentication settings without connecting to dependencies. Invalid configuration

@@ -23,6 +23,7 @@ func main() {
 		os.Exit(1)
 	}
 }
+
 // run validates configuration, opens and migrates PostgreSQL, and serves the API
 // until interrupted or terminated. It allows ten seconds to drain requests before
 // forcing closure. Configuration, authentication, storage, and serving errors

@@ -43,18 +43,25 @@ clients display Go summaries; neither recomputes financial totals.
 
 ## Verification
 
-From `services/api`:
+Create a dedicated test database once from the repository root:
 
 ```sh
-export TEST_DATABASE_URL='postgres://folio:folio-local-only@localhost:5432/folio?sslmode=disable'
+docker compose -f infra/compose.yaml exec postgres createdb -U folio folio_test
+```
+
+Then, from `services/api`:
+
+```sh
+export TEST_DATABASE_URL='postgres://folio:folio-local-only@localhost:5432/folio_test?sslmode=disable'
 go test -race -count=1 ./...
 go vet ./...
 go build -o /tmp/folio ./cmd/folio
 ```
 
 Without `TEST_DATABASE_URL`, real database tests explicitly skip. CI supplies
-PostgreSQL and runs them. Database tests use synthetic owner UUIDs and clean up
-their records; use a dedicated development/test database. They test parallel
+PostgreSQL and runs them. Database tests commit synthetic owner UUIDs and retry
+records without deleting them; always use a dedicated test database such as
+`folio_test`, separate from the application's `folio` database. They test parallel
 idempotency, rollback, durability, owner isolation and RLS. HTTP contract tests
 validate real responses against OpenAPI and consume shared fixtures.
 

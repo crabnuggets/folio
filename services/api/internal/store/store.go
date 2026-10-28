@@ -24,6 +24,7 @@ func JSON(status int, body any, version int64) (Result, error) {
 	}
 	return r, e
 }
+
 // fmtETag quotes a decimal resource version for use as a strong ETag.
 func fmtETag(v int64) string { return `"` + strconv.FormatInt(v, 10) + `"` }
 

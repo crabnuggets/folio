@@ -104,6 +104,7 @@ func New(config Config) (func(http.Handler) http.Handler, error) {
 		})
 	}, nil
 }
+
 // writeError sends an uncached authentication error with a bearer challenge and
 // request ID, generating an ID when absent. Response encoding errors are ignored.
 func writeError(w http.ResponseWriter, status int, code, message string) {
@@ -118,6 +119,7 @@ func writeError(w http.ResponseWriter, status int, code, message string) {
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(map[string]any{"error": map[string]any{"code": code, "message": message, "fields": map[string]string{}, "request_id": requestID}})
 }
+
 // key resolves a token's kid to a compatible cached RSA or EC public key, refreshing
 // expired or unknown keys at most once per minute. Missing, unavailable, unknown,
 // or incompatible keys and unsupported methods return errors; refresh errors propagate.
@@ -157,6 +159,7 @@ func (v *verifier) key(token *jwt.Token) (any, error) {
 	}
 	return value, nil
 }
+
 // refresh replaces signing keys from the configured JWKS endpoint for one hour.
 // The caller must hold v.mu. Unsupported or malformed individual keys are skipped;
 // fetch failures, invalid documents, duplicate accepted key IDs, or no usable keys

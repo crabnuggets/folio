@@ -234,6 +234,7 @@ func (s *State) CreateStatement(in StatementInput) (Statement, error) {
 	s.bumpStatementMonths(st.StatementInput)
 	return st, nil
 }
+
 // sameStatementRef compares optional record IDs, treating two nil references as equal.
 func sameStatementRef(a, b *string) bool {
 	if a == nil || b == nil {
@@ -427,8 +428,9 @@ func (s *State) CreateSettlement(statementID string, in SettlementInput, expecte
 // CreateObligationAdjustment records a positive minor-unit credit after the cycle
 // cutoff without changing recognized spending. It advances the statement version
 // and affected months and audits the credit. expected is the statement version.
-// Payable errors, invalid inputs or optional refund links, closed credit months,
-// credits exceeding a linked refund, and credit-range errors are returned.
+// Payable errors, invalid inputs, closed credit months, and credit-range errors
+// are returned. Cash refund links are rejected because direct-expense refunds
+// have no statement-card association in the current model.
 func (s *State) CreateObligationAdjustment(statementID string, in ObligationAdjustmentInput, expected int64) (ObligationAdjustment, error) {
 	st, e := s.payableForMutation(statementID, expected)
 	if e != nil {
@@ -441,22 +443,7 @@ func (s *State) CreateObligationAdjustment(statementID string, in ObligationAdju
 		return ObligationAdjustment{}, e
 	}
 	if in.RefundEntryID != nil {
-		entry, ok := s.Entries[*in.RefundEntryID]
-		if !ok {
-			return ObligationAdjustment{}, NotFound()
-		}
-		if !entry.Active || entry.Kind != "refund" || entry.Currency != st.Currency || entry.EffectiveDate != in.EffectiveDate {
-			return ObligationAdjustment{}, Invalid("Obligation credit must reference a matching confirmed refund")
-		}
-		used := big.NewInt(int64(in.AmountMinor))
-		for _, v := range s.ObligationAdjustments {
-			if v.RefundEntryID != nil && *v.RefundEntryID == entry.ID {
-				used.Add(used, big.NewInt(int64(v.AmountMinor)))
-			}
-		}
-		if used.Cmp(big.NewInt(int64(entry.AmountMinor))) > 0 {
-			return ObligationAdjustment{}, Fail(409, "REFUND_LIMIT", "Obligation credits exceed the refund amount")
-		}
+		return ObligationAdjustment{}, Invalid("Cash refunds of direct expenses cannot credit a card obligation; record an explicit statement credit without a refund entry link")
 	}
 	if e := s.checkStatementCredit(st, in.AmountMinor); e != nil {
 		return ObligationAdjustment{}, e
@@ -477,6 +464,7 @@ func (s *State) ensureStatementMonthsOpen(in StatementInput) error {
 	}
 	return s.EnsureOpen(in.DueDate[:7])
 }
+
 // bumpStatementMonths advances each distinct reporting, due, and extra month once.
 // Callers must supply validated dates and months.
 func (s *State) bumpStatementMonths(in StatementInput, extra ...string) {

@@ -76,6 +76,7 @@ func New(db store.Store, ownerID string, middleware func(http.Handler) http.Hand
 		root.ServeHTTP(w, r)
 	})
 }
+
 // writeError sends domain error details with the response's request ID.
 // Other errors become a generic 503 response without exposing their contents.
 func writeError(w http.ResponseWriter, r *http.Request, err error) {
@@ -93,6 +94,7 @@ func writeError(w http.ResponseWriter, r *http.Request, err error) {
 	v.Error.RequestID = w.Header().Get("X-Request-ID")
 	writeJSON(w, r, de.Status, v, 0)
 }
+
 // writeJSON sends a JSON response with an ETag for positive versions.
 // Encoding failures become a public 500 error response.
 func writeJSON(w http.ResponseWriter, r *http.Request, status int, v any, version int64) {
@@ -103,6 +105,7 @@ func writeJSON(w http.ResponseWriter, r *http.Request, status int, v any, versio
 	}
 	writeResult(w, result)
 }
+
 // writeResult sends the encoded status, body, and optional ETag, ignoring write errors.
 func writeResult(w http.ResponseWriter, result store.Result) {
 	w.Header().Set("Content-Type", "application/json")
@@ -112,6 +115,7 @@ func writeResult(w http.ResponseWriter, result store.Result) {
 	w.WriteHeader(result.Status)
 	_, _ = w.Write(result.Body)
 }
+
 // readJSON decodes one request object, checking required fields and rejecting null,
 // unknown fields, incompatible values, and trailing JSON with a 400 MALFORMED_JSON
 // error. Draft candidate completeness is deferred until acceptance.
@@ -134,6 +138,7 @@ func readJSON[T any](body []byte) (T, error) {
 	}
 	return in, nil
 }
+
 // version reads a strong If-Match ETag containing a canonical positive int64.
 // Missing preconditions return 428; malformed or out-of-range versions return 400.
 func version(r *http.Request) (int64, error) {
@@ -151,6 +156,7 @@ func version(r *http.Request) (int64, error) {
 	}
 	return n, nil
 }
+
 // read loads owner state and sends fn's value with status 200 and its optional
 // version ETag. Store and callback errors are sent through writeError.
 func (s *server) read(w http.ResponseWriter, r *http.Request, fn func(*domain.State) (any, int64, error)) {
@@ -166,6 +172,7 @@ func (s *server) read(w http.ResponseWriter, r *http.Request, fn func(*domain.St
 	}
 	writeJSON(w, r, 200, v, ver)
 }
+
 // mutate validates a UUID retry key, JSON media type, a body of at most 1 MiB,
 // and If-Match when versioned. It executes fn transactionally, validates summaries,
 // and stores the encoded response for retries. Request identity includes method,
@@ -266,6 +273,7 @@ func paginate[T any](r *http.Request, values map[string]T, filter func(T) bool) 
 	}
 	return p, nil
 }
+
 // list sends a filtered page of owner records, rejecting an invalid optional month
 // query with INVALID_MONTH. The caller's filter determines month membership;
 // storage and pagination errors are sent through writeError.
@@ -276,6 +284,7 @@ func list[T any](s *server, w http.ResponseWriter, r *http.Request, fn func(*dom
 	}
 	s.read(w, r, func(state *domain.State) (any, int64, error) { v, e := paginate(r, fn(state), filter); return v, 0, e })
 }
+
 // lookup returns the record named by the id path parameter, or NOT_FOUND if absent.
 func lookup[T any](r *http.Request, values map[string]T) (T, error) {
 	id := r.PathValue("id")
