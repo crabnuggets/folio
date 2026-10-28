@@ -1,0 +1,173 @@
+{
+  "schema_version": 1,
+  "name": "recognized-spending-baseline",
+  "description": "Synthetic October baseline. Card settlement changes payable, not spending. Values are minor units. $ref strings resolve to resource IDs returned by API creates.",
+  "month": "2026-10",
+  "currency": "SGD",
+  "accounts": [
+    {
+      "ref": "funding",
+      "input": {
+        "alias": "Funding",
+        "kind": "bank",
+        "currency": "SGD",
+        "active": true,
+        "include_in_liquid_cash": true,
+        "funding_boundary": [
+          {
+            "effective_month": "2026-01",
+            "included": true
+          }
+        ]
+      }
+    },
+    {
+      "ref": "card_a",
+      "input": {
+        "alias": "Card A",
+        "kind": "credit_card",
+        "currency": "SGD",
+        "active": true,
+        "include_in_liquid_cash": false,
+        "funding_boundary": []
+      }
+    },
+    {
+      "ref": "card_b",
+      "input": {
+        "alias": "Card B",
+        "kind": "credit_card",
+        "currency": "SGD",
+        "active": true,
+        "include_in_liquid_cash": false,
+        "funding_boundary": []
+      }
+    },
+    {
+      "ref": "investments",
+      "input": {
+        "alias": "Investments",
+        "kind": "investment",
+        "currency": "SGD",
+        "active": true,
+        "include_in_liquid_cash": false,
+        "funding_boundary": []
+      }
+    }
+  ],
+  "entries": [
+    {
+      "ref": "salary",
+      "input": {
+        "kind": "income",
+        "amount_minor": "500000",
+        "currency": "SGD",
+        "effective_date": "2026-10-25",
+        "reporting_month": "2026-10",
+        "source_account_id": null,
+        "destination_account_id": "$funding",
+        "category": "salary"
+      }
+    },
+    {
+      "ref": "rent",
+      "input": {
+        "kind": "direct_expense",
+        "amount_minor": "100000",
+        "currency": "SGD",
+        "effective_date": "2026-10-25",
+        "reporting_month": "2026-10",
+        "source_account_id": "$funding",
+        "destination_account_id": null,
+        "category": "rent"
+      }
+    },
+    {
+      "ref": "investment",
+      "input": {
+        "kind": "allocation",
+        "amount_minor": "80000",
+        "currency": "SGD",
+        "effective_date": "2026-10-25",
+        "reporting_month": "2026-10",
+        "source_account_id": "$funding",
+        "destination_account_id": "$investments",
+        "category": ""
+      }
+    },
+    {
+      "ref": "payment_a",
+      "input": {
+        "kind": "card_settlement",
+        "amount_minor": "120000",
+        "currency": "SGD",
+        "effective_date": "2026-10-25",
+        "reporting_month": "2026-10",
+        "source_account_id": "$funding",
+        "destination_account_id": "$card_a",
+        "category": ""
+      }
+    }
+  ],
+  "statements": [
+    {
+      "ref": "statement_a",
+      "input": {
+        "account_id": "$card_a",
+        "currency": "SGD",
+        "cycle_start": "2026-09-01",
+        "cycle_end": "2026-09-30",
+        "issue_date": "2026-10-01",
+        "due_date": "2026-10-28",
+        "amount_due_minor": "120000",
+        "net_spending_minor": "120000",
+        "spending_evidence": "Synthetic bank-labeled net new cycle spending fixture"
+      }
+    },
+    {
+      "ref": "statement_b",
+      "input": {
+        "account_id": "$card_b",
+        "currency": "SGD",
+        "cycle_start": "2026-09-01",
+        "cycle_end": "2026-09-30",
+        "issue_date": "2026-10-01",
+        "due_date": "2026-10-28",
+        "amount_due_minor": "30000",
+        "net_spending_minor": "30000",
+        "spending_evidence": "Synthetic bank-labeled net new cycle spending fixture"
+      }
+    }
+  ],
+  "settlements": [
+    {
+      "statement_ref": "statement_a",
+      "entry_ref": "payment_a",
+      "amount_minor": "120000"
+    }
+  ],
+  "claims": [],
+  "checklist": {
+    "income_reviewed": true,
+    "cards_reviewed": true,
+    "expenses_reviewed": true,
+    "allocations_reviewed": true,
+    "no_statement_reasons": {}
+  },
+  "expected_summary": {
+    "income_minor": "500000",
+    "gross_spending_minor": "250000",
+    "known_spending_minor": "250000",
+    "allocation_minor": "80000",
+    "monthly_surplus_minor": "170000",
+    "funding_inflows_minor": "500000",
+    "funding_outflows_minor": "300000",
+    "funding_remainder_minor": "200000",
+    "is_provisional": false,
+    "spending_complete": true
+  },
+  "expected_remaining_payable": {
+    "statement_a": "0",
+    "statement_b": "30000"
+  }
+}
