@@ -1,6 +1,6 @@
 # A simpler monthly Folio
 
-Status: UX proposal for review, 2026-10-29. The user supports the simpler direction and requested history-based name suggestions and thoughtfully placed monthly recurrence. This proposes a replacement for the current manual experience. It does not change the running app or migrate existing data.
+Status: Accepted direction and implementation requirements, 2026-10-29. The user approved proceeding with the simpler monthly sheet, including history-based name suggestions and thoughtfully placed monthly recurrence. [ADR 0006](../adr/0006-monthly-sheet.md) records the change from the earlier manual experience. Existing data is retained without automatic migration.
 
 ## The job
 
@@ -12,7 +12,7 @@ The current app exposes seven destinations. An ordinary entry asks for an entry 
 
 ## Proposed language
 
-These terms are proposed for the new experience. They are not yet replacements for the existing glossary's accounting definitions.
+These terms describe the monthly-sheet experience and are recorded in the glossary. The older financial definitions still apply to retained legacy data.
 
 | Term | Meaning | Examples |
 | --- | --- | --- |
@@ -154,7 +154,7 @@ The first version keeps month selection, sections, named monthly amounts, histor
 
 [ADR 0003](../adr/0003-funding-boundary-and-reimbursements.md) requires confirmed cash movements across selected funding accounts as the primary view. A sheet of assigned monthly amounts without payment dates or account setup cannot honestly claim to implement that measure. This proposal therefore names its result **Monthly remainder** and defines it only from entered monthly amounts. Card bills contribute in their assigned month regardless of payment timing.
 
-The financial distinctions behind those ADRs still explain double-counting risks. The redesign should retain correct arithmetic while reconsidering which financial questions the product promises to answer. The confirmed card-bill interpretation makes this a monthly accounting summary rather than a confirmed-cash ledger. After the overall flow is accepted, record the superseding product decision and update the product requirements and accounting contract together. Do not silently translate old postings into new monthly cells or delete old financial data.
+The financial distinctions behind those ADRs still explain double-counting risks. The confirmed card-bill interpretation makes this a monthly accounting summary rather than a confirmed-cash ledger. [ADR 0006](../adr/0006-monthly-sheet.md) supersedes those primary-workflow requirements. Do not silently translate old postings into new monthly cells or delete old financial data.
 
 The existing [visual guide](10-visual-design.md) supplies the light, restrained appearance. Its multiple review metrics and review-task hierarchy need revising for this single-sheet scope.
 
@@ -173,8 +173,8 @@ The existing [visual guide](10-visual-design.md) supplies the light, restrained 
 - No real account, statement, claim, plan, draft, or close-month configuration is necessary to complete the monthly check-in.
 - On a phone, amounts remain editable without sideways scrolling. Save errors preserve the edit, identify the affected row, and offer a safe retry.
 
-## Next implementation boundary
+## Implementation boundary
 
-First settle the overall flow. Card amounts already have a confirmed meaning: the bill amount for the month. Then build a clean monthly-sheet path with a minimal data contract. Existing endpoints require dates, financial classifications, and account relationships that this flow deliberately does not request; hiding those fields and inventing values would preserve the wrong model.
+Build a clean monthly-sheet path with a minimal data contract. Existing legacy endpoints require dates, financial classifications, and account relationships that this flow deliberately does not request; hiding those fields and inventing values would preserve the wrong model.
 
-Keep existing financial history intact while preparing an explicit mapping for any migration. No backend removal, data deletion, or replacement of the running app is part of this design proposal.
+Keep existing financial history intact. Replace the default React experience and add the corresponding Go monthly-sheet model while retaining legacy endpoints and export. Data deletion, automatic migration, hosted deployment, and new integrations are outside this implementation.

@@ -2,6 +2,8 @@
 
 Prepared 2026-10-26. These documents distinguish accepted decisions from proposed implementation details. Render + Supabase is accepted for the first hosted version; unattended processing remains deferred until Gmail integration.
 
+Updated 2026-10-29: start with the [simple monthly UX](11-simple-monthly-ux.md), [monthly-sheet contract](../../api/monthly-sheet-contract.md), and [ADR 0006](../adr/0006-monthly-sheet.md). They replace the earlier multi-screen manual-review scope. Legacy accounting and migration notes remain available to explain retained data; they do not add setup or review requirements to the new sheet.
+
 ## Read in this order
 
 1. [Product and experience](01-product.md): scope, screens, assumptions, and success criteria.
@@ -31,6 +33,6 @@ Prepared 2026-10-26. These documents distinguish accepted decisions from propose
 
 ## Recommended first slice
 
-Implement manual entry of one salary, personal spending funding and returned excess, two card statements and their payment states, a direct expense, and an investment allocation; display funding remainder and spending totals separately in a responsive React dashboard. Then add export and corrections. This proves the accounting before introducing document parsing or email permissions.
+Implement one monthly sheet with salary, personal spending top-up and returned excess, two card bill amounts, a direct outgoing, and savings or investment contributions. Display their entered totals and monthly remainder. Add history name suggestions, opt-in monthly recurrence, usual-amount suggestions, notes, correction with Undo, and export without requiring accounts, statements, payments, claims, plans, or month close. Keep document parsing and email permissions outside this slice.
 
 The final target includes a real Kotlin Android application. A responsive web app or installable PWA provides earlier mobile access but does not replace that deliverable.

@@ -39,7 +39,7 @@ func (s *State) UpdateSettings(input SettingsInput, expected int64) (Settings, e
 	if _, err := time.LoadLocation(input.Timezone); err != nil {
 		return Settings{}, Invalid("Timezone must be an IANA timezone")
 	}
-	if input.Currency != s.Settings.Currency && (len(s.Accounts) > 0 || len(s.Entries) > 0 || len(s.Statements) > 0 || len(s.Claims) > 0 || len(s.Snapshots) > 0 || len(s.Plans) > 0 || len(s.Recurrences) > 0 || len(s.Periods) > 0 || len(s.LegacySummaries) > 0) {
+	if input.Currency != s.Settings.Currency && (s.MonthlySheet.CurrencyLocked || len(s.Accounts) > 0 || len(s.Entries) > 0 || len(s.Statements) > 0 || len(s.Claims) > 0 || len(s.Snapshots) > 0 || len(s.Plans) > 0 || len(s.Recurrences) > 0 || len(s.Periods) > 0 || len(s.LegacySummaries) > 0) {
 		return Settings{}, Fail(409, "CURRENCY_LOCKED", "Currency cannot change after financial setup; an explicit migration is required")
 	}
 	before := s.Settings

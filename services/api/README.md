@@ -1,9 +1,14 @@
 # Go backend
 
-The manual financial core serves the same REST/JSON API to React and Kotlin clients.
+The monthly sheet and legacy financial core serve the same REST/JSON API to React and Kotlin clients.
 The [shared contract](../../api/README.md) and [OpenAPI](../../api/openapi.yaml)
 cover implemented and explicitly deferred operations. [ADR 0005](../../docs/adr/0005-backend-owner-aggregate.md)
 explains the PostgreSQL owner aggregate and its scaling tradeoff.
+
+The [monthly sheet contract](../../api/monthly-sheet-contract.md) defines the
+current section/item workflow, effective monthly recurrence, history lookup and
+safe Undo. It persists in the same owner aggregate and transaction while keeping
+legacy financial history separate. No migration or additional infrastructure is required.
 
 ## Local setup
 
@@ -30,7 +35,7 @@ Compose volume is durable; `docker compose down -v` deletes local data.
 
 ### Local web development
 
-The React client supports the P2 manual monthly review. Keep the Go API running
+The React client opens the monthly sheet. Keep the Go API running
 in one terminal and run Vite from another terminal at the repository root:
 
 ```sh
