@@ -9,6 +9,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"os"
 	"reflect"
 	"sort"
 	"strconv"
@@ -38,6 +39,42 @@ type errorEnvelope struct {
 // middleware wraps /api/v1/; nil denies all API access. Responses receive request
 // and security headers, and recovered panics produce a public internal error.
 func New(db store.Store, ownerID string, middleware func(http.Handler) http.Handler) http.Handler {
+	return newServer(db, ownerID, middleware, "")
+}
+
+// NewWithWebDistDir builds the API and optionally serves a built React SPA from
+// webDistDir. An empty path preserves API-only behavior. A configured directory
+// must exist and contain a regular index.html; static files are opened beneath
+// that directory and never replace API or health responses.
+func NewWithWebDistDir(db store.Store, ownerID string, middleware func(http.Handler) http.Handler, webDistDir string) (http.Handler, error) {
+	if strings.TrimSpace(webDistDir) == "" {
+		return New(db, ownerID, middleware), nil
+	}
+	root, err := os.OpenRoot(webDistDir)
+	if err != nil {
+		return nil, err
+	}
+	defer root.Close()
+	info, err := root.Stat(".")
+	if err != nil {
+		return nil, err
+	}
+	if !info.IsDir() {
+		return nil, errors.New("WEB_DIST_DIR must be a directory")
+	}
+	index, err := root.Open("index.html")
+	if err != nil {
+		return nil, errors.New("WEB_DIST_DIR must contain index.html")
+	}
+	indexInfo, err := index.Stat()
+	_ = index.Close()
+	if err != nil || !indexInfo.Mode().IsRegular() {
+		return nil, errors.New("WEB_DIST_DIR index.html must be a regular file")
+	}
+	return newServer(db, ownerID, middleware, webDistDir), nil
+}
+
+func newServer(db store.Store, ownerID string, middleware func(http.Handler) http.Handler, webDistDir string) http.Handler {
 	s := &server{db, ownerID}
 	api := http.NewServeMux()
 	s.routes(api)
@@ -63,7 +100,13 @@ func New(db store.Store, ownerID string, middleware func(http.Handler) http.Hand
 		}
 	}
 	root.Handle("/api/v1/", middleware(api))
-	root.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) { writeError(w, r, domain.NotFound()) })
+	root.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if webDistDir != "" {
+			serveWeb(w, r, webDistDir)
+			return
+		}
+		writeError(w, r, domain.NotFound())
+	}))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Request-ID", domain.NewID())
 		w.Header().Set("Cache-Control", "no-store")
@@ -73,6 +116,10 @@ func New(db store.Store, ownerID string, middleware func(http.Handler) http.Hand
 				writeError(w, r, domain.Fail(500, "INTERNAL_ERROR", "The request could not be completed"))
 			}
 		}()
+		if webDistDir != "" && unsafeWebPath(r.URL.Path) {
+			writeError(w, r, domain.NotFound())
+			return
+		}
 		root.ServeHTTP(w, r)
 	})
 }

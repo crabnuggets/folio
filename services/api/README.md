@@ -7,8 +7,9 @@ explains the PostgreSQL owner aggregate and its scaling tradeoff.
 
 ## Local setup
 
-Requirements: Go **1.26.10**, Docker with Compose, and Python **3.12+** for contract
-validation. PostgreSQL is pinned to **17.6**. No hosted account or API key is needed.
+Requirements: Go **1.26.10**, Docker with Compose, Node **22.22.2** for the web
+client, and Python **3.12+** for contract validation. PostgreSQL is pinned to
+**17.6**. No hosted account or API key is needed.
 From the repository root:
 
 ```sh
@@ -26,6 +27,55 @@ API client. `.env.example` documents configuration; `.env` is not loaded
 automatically. PostgreSQL is required; the running server never selects an
 in-memory fallback. Migrations apply under a startup transaction lock. The local
 Compose volume is durable; `docker compose down -v` deletes local data.
+
+### Local web development
+
+The React client supports the P2 manual monthly review. Keep the Go API running
+in one terminal and run Vite from another terminal at the repository root:
+
+```sh
+cd apps/web
+npm ci
+npm run dev
+```
+
+Vite proxies `/api` requests to `http://localhost:8080`; override the target with
+`FOLIO_API_PROXY_TARGET`. Use `npm.cmd` and `npx.cmd` in PowerShell. Sign in with
+the configured owner bearer token; the client keeps it only in tab memory. Leave `WEB_DIST_DIR`
+unset in this workflow: Go then serves only API and health routes, and Vite serves
+the development client. The explicit `AUTH_MODE=dev` token from the API setup is
+accepted for local API calls; production refuses this mode.
+
+### Built frontend and static hosting
+
+Set `WEB_DIST_DIR` to a built Vite `dist` directory to enable Go's optional SPA
+hosting. The directory must contain `index.html`. `GET` and `HEAD` requests for
+existing files are served from that directory; extensionless browser navigations
+accepting `text/html` fall back to the app entry point. Missing assets, API paths,
+and health paths return JSON errors or their normal JSON health responses. The
+default when `WEB_DIST_DIR` is unset remains API-only.
+
+The combined production image builds the frontend with Node **22.22.2** and the
+Go API, then serves the bundle from `/app/web/dist` as the non-root Go process.
+From the repository root:
+
+```sh
+docker build -f services/api/Dockerfile -t folio:local .
+docker run --rm --name folio -p 8080:8080 \
+  -e APP_ENV=production \
+  -e AUTH_MODE=jwt \
+  -e OWNER_ID=11111111-1111-4111-8111-111111111111 \
+  -e DATABASE_URL='postgres://folio:<database-password>@db.<project-ref>.supabase.co:5432/postgres?sslmode=verify-full' \
+  -e JWT_ISSUER='https://<project-ref>.supabase.co/auth/v1' \
+  -e JWT_AUDIENCE=authenticated \
+  -e WEB_DIST_DIR=/app/web/dist \
+  folio:local
+```
+
+Replace the database password and project reference before starting the
+production image. Production browser Supabase session/PKCE login and refresh are
+P3; the API currently verifies JWT bearer tokens, while `AUTH_MODE=dev` remains
+local-development-only.
 
 ```sh
 curl -H "Authorization: Bearer $DEV_AUTH_TOKEN" http://localhost:8080/api/v1/settings
@@ -88,7 +138,9 @@ made safe by RLS alone. The container runs as a non-root user. `/healthz` checks
 process health and `/readyz` checks DB connectivity. SIGTERM drains requests.
 
 This slice implements bearer authentication, manual structured draft review,
-rule-based insights and JSON export. Browser session/PKCE UX, restore/CSV,
-frontend/Android applications, bank parsers, Gmail, and natural-language capture
-remain subsequent planned work. Their integration routes return a structured
-501 until implemented. No hosting or paid provider has been provisioned.
+rule-based insights and JSON export. The React client covers the P2 manual monthly
+review and displays server-derived financial summaries. Production browser
+session/PKCE UX and token refresh remain P3. Android, restore/CSV, bank parsers,
+Gmail, and natural-language capture remain subsequent planned work. Their
+integration routes return a structured 501 until implemented. No hosting or paid
+provider has been provisioned.

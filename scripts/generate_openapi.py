@@ -248,11 +248,11 @@ def main():
     target = ROOT / "api/openapi.yaml"
     text = json.dumps(DOCUMENT, indent=2, ensure_ascii=False) + "\n"
     if args.check:
-        if not target.exists() or target.read_text() != text:
+        if not target.exists() or target.read_text(encoding="utf-8") != text:
             raise SystemExit("api/openapi.yaml differs from reviewed generator; run python scripts/generate_openapi.py")
         print("OpenAPI generation is current")
     else:
-        target.write_text(text)
+        target.write_text(text, encoding="utf-8", newline="\n")
         print(f"Wrote {len(PATHS)} paths and {len(SCHEMAS)} schemas")
 
 if __name__ == "__main__":
