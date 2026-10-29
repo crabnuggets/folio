@@ -49,4 +49,12 @@ The reviewer inspected `14c151e..172b095` and found one P2 incomplete keyboard f
 
 The root removed the item-name button's disabled state. Amount and details editing remain locked by the existing save state. The new dirty-boundary regression and existing forward/backward/boundary/details traversal case pass on desktop and phone, four cases total. Browser-test TypeScript and the production build also pass. No broader keyboard controls or product features were added.
 
-Fix-only iteration 2 reviews only that follow-up delta. One further iteration remains available if necessary.
+## Fix-only iteration 2
+
+The fresh reviewer inspected `172b095..6338ad6` and found no issues. The item-name button only opens details; amount inputs and details mutation controls remain locked during saves. The new real-PUT regression covers both focus retention during the save and access to details after completion. The reviewer found no scope creep or reason to broaden the change. The loop ended after two iterations, within the three-iteration maximum.
+
+## Final validation
+
+The root reran full Go tests and vet, OpenAPI generation and validation, generated client consistency, 45 frontend unit tests, browser-test TypeScript, and all 56 real-Go Playwright cases across desktop and phone. The browser harness rebuilt the production client successfully. All passed, along with whitespace checks.
+
+Local live-PostgreSQL and combined-image verification remain unavailable because Docker was unresponsive. The existing CI workflows provide PostgreSQL for the restart/retry/Undo and race tests and build the combined production image. Those results must be assessed separately from the passing local checks. No deployment or merge is part of this task.
