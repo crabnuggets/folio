@@ -35,6 +35,28 @@ test('amount Tab traverses both ways, exits boundaries, and returns to item opti
   expect((await backend.get<'MonthlySheet'>(`/monthly-sheets/${month}`)).money_in_minor).toBe('12200');
 });
 
+test('dirty first amount keeps focus on item options while Shift+Tab autosaves', async ({ page, backend }) => {
+  await backend.add('Salary', '10000'); await signIn(page);
+  let releaseSave = () => {};
+  let writeStarted = () => {};
+  const started = new Promise<void>(resolve => { writeStarted = resolve; });
+  await page.route('**/api/v1/monthly-sheets/*/items/*', async route => {
+    if (route.request().method() !== 'PUT') return route.continue();
+    await new Promise<void>(resolve => { releaseSave = resolve; writeStarted(); });
+    await route.continue();
+  });
+  const field = page.getByLabel('Amount for Salary', { exact: true });
+  const options = page.getByRole('button', { name: 'Salary', exact: true });
+  try {
+    await field.fill('101'); await field.press('Shift+Tab'); await started;
+    await expect(field).toBeDisabled(); await expect(options).toBeFocused();
+  } finally { releaseSave(); }
+  await expect(field).toBeEnabled(); await expect(options).toBeFocused();
+  await expect(field).toHaveValue('101.00');
+  expect((await backend.get<'MonthlySheet'>(`/monthly-sheets/${month}`)).money_in_minor).toBe('10100');
+  await options.press('Enter'); await expect(page.getByLabel('Name', { exact: true })).toBeFocused();
+});
+
 for (const changed of ['removed', 'relocated'] as const) test(`compare retains ${changed} details, affected queued amount, and unrelated details`, async ({ page, backend }) => {
   await backend.add('Salary', '10000'); await backend.add('Refund', '2000', sectionIds.otherIn); await backend.add('Other', '100', sectionIds.otherIn); await signIn(page);
   await page.getByRole('button', { name: 'Salary', exact: true }).click();

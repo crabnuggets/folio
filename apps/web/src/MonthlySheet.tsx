@@ -245,7 +245,7 @@ function ItemRow({ item, section, sheet, api, available, locked, feedback, perfo
     saveEdit(latest => api.command<'MonthlySheet'>(`/monthly-sheets/${sheet.month}/items/${item.id}`, { ...updateInput(findItem(latest, item.id)), amount_minor: minor }, { method: 'PUT', version: latest.version }), clean);
   };
   return <div className="sheet-row" data-item={item.id}>
-    <button id={`item-${item.id}`} className="item-name" aria-expanded={details} onClick={() => setDetails(true)} disabled={locked}>{item.name}{item.repeat_monthly && <span className="monthly-label">Monthly</span>}</button>
+    <button id={`item-${item.id}`} className="item-name" aria-expanded={details} onClick={() => setDetails(true)}>{item.name}{item.repeat_monthly && <span className="monthly-label">Monthly</span>}</button>
     <div><label className="sr-only" htmlFor={`amount-${item.id}`}>{section.amount_label} for {item.name}</label><input id={`amount-${item.id}`} className="amount-field" inputMode="decimal" autoComplete="off" value={value} placeholder={item.usual_amount_minor != null && item.repeat_monthly ? `Usual ${moneyInput(item.usual_amount_minor, sheet.currency_exponent)}` : 'Not entered'} disabled={locked} aria-invalid={Boolean(error) || undefined} aria-describedby={error ? `error-${item.id}` : undefined} onChange={event => {
       edited.current = true; markDirty(item.id, true); setValue(event.target.value); setError('');
     }} onBlur={event => { if (!(event.relatedTarget instanceof HTMLElement && event.relatedTarget.dataset.discardAmount === item.id)) save(); }} onKeyDown={event => {

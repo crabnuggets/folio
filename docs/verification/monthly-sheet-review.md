@@ -43,4 +43,10 @@ The implementation delegate added regression cases that reproduced each accepted
 
 Final fix-pass checks passed: full Go tests and vet, OpenAPI generation and validation, generated client types, client typecheck and 45 unit tests, production build, browser-test TypeScript, whitespace checks, and 54 real-Go Playwright tests across desktop and phone. The browser's `.last-run.json` also reports passed. Four PostgreSQL tests remain explicitly skipped locally.
 
-Fix-only iteration outcomes will be recorded here before opening the PR.
+## Fix-only iteration 1
+
+The reviewer inspected `14c151e..172b095` and found one P2 incomplete keyboard fix: Shift+Tab from a dirty first amount focused its item-name button, then blur autosave disabled that button and dropped focus to the body. The earlier boundary test covered only a clean value. The root accepted this finding and reproduced it with a real-Go browser test that holds the save in flight.
+
+The root removed the item-name button's disabled state. Amount and details editing remain locked by the existing save state. The new dirty-boundary regression and existing forward/backward/boundary/details traversal case pass on desktop and phone, four cases total. Browser-test TypeScript and the production build also pass. No broader keyboard controls or product features were added.
+
+Fix-only iteration 2 reviews only that follow-up delta. One further iteration remains available if necessary.
