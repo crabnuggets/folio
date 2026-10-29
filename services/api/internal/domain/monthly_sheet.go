@@ -141,6 +141,7 @@ func (s *State) GetMonthlySheet(month string) (MonthlySheet, error) {
 		return MonthlySheet{}, Invalid("Invalid monthly sheet month")
 	}
 	result := MonthlySheet{Month: month, Version: s.MonthlySheet.Version, Currency: s.Settings.Currency, CurrencyExponent: s.Settings.CurrencyExponent, Sections: []MonthlySection{}}
+	result.CurrencyLocked = s.currencyLocked()
 	result.HasLegacyData = len(s.Accounts)+len(s.Entries)+len(s.Statements)+len(s.Claims)+len(s.Snapshots)+len(s.Plans)+len(s.Recurrences)+len(s.Periods)+len(s.Drafts)+len(s.LegacySummaries) > 0
 	var incoming, outgoing summarySum
 	for _, section := range s.MonthlySheet.Sections {

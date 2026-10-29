@@ -1665,6 +1665,7 @@ export interface components {
             version: number;
             currency: components["schemas"]["Currency"];
             currency_exponent: number;
+            currency_locked: boolean;
             has_legacy_data: boolean;
             undo_token: components["schemas"]["UUID"] | null;
             money_in_minor: components["schemas"]["Money"];

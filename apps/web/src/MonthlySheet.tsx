@@ -35,6 +35,8 @@ export function MonthlySheet({ api, signedIn, onDirty, onLogout }: { api: ApiCli
   const running = useRef(false);
   const [dirty, setDirty] = useState<Set<string>>(new Set());
   const dirtyRef = useRef(new Set<string>());
+  // Keep dirty rows mounted in their original section until saved or discarded.
+  const retainedRows = useRef(new Map<string, Item>());
   const [addSection, setAddSection] = useState<string | null>(null);
   const [notice, setNotice] = useState('');
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -44,6 +46,12 @@ export function MonthlySheet({ api, signedIn, onDirty, onLogout }: { api: ApiCli
   const accept = (value: Sheet) => { sheetRef.current = value; setSheet(value); };
   const markDirty = (key: string, value: boolean) => {
     if (value) dirtyRef.current.add(key); else dirtyRef.current.delete(key);
+    const id = key.replace(/-details$/, '');
+    if (value && !retainedRows.current.has(id) && sheetRef.current) {
+      const item = findItem(sheetRef.current, id);
+      if (item) retainedRows.current.set(id, item);
+    }
+    if (!dirtyRef.current.has(id) && !dirtyRef.current.has(`${id}-details`)) retainedRows.current.delete(id);
     setDirty(new Set(dirtyRef.current));
     if (value) setJobs(previous => {
       const jobKey = key.replace(/-details$/, '');
@@ -63,7 +71,11 @@ export function MonthlySheet({ api, signedIn, onDirty, onLogout }: { api: ApiCli
       accept(result); job.status = 'saved'; job.error = undefined; publish(job);
       queue.current.shift(); job.done?.(result); job.resolve?.(true);
     } catch (error) {
-      job.status = 'failed'; job.error = error; job.uncertain ||= isUncertain(error); publish(job); job.resolve?.(false);
+      job.status = 'failed'; job.error = error;
+      // Idempotency replay precedes version checking: an exact retry's 412
+      // proves this command did not commit. Authentication loss proves nothing.
+      job.uncertain = error instanceof ApiError && error.status === 412 ? false : job.uncertain || isUncertain(error);
+      publish(job); job.resolve?.(false);
     } finally { running.current = false; if (queue.current[0]?.status === 'queued') void drain(); }
   };
   const perform: Perform = (key, build, done) => {
@@ -100,9 +112,15 @@ export function MonthlySheet({ api, signedIn, onDirty, onLogout }: { api: ApiCli
   const compare = async (job: Job) => {
     // A rejected precondition has no write to recover. Fetch before releasing it.
     if (!await load()) return;
-    queue.current = queue.current.filter(value => value.key !== job.key);
-    setJobs(previous => { const next = { ...previous }; delete next[job.key]; return next; });
-    setNotice('Latest saved values loaded. Your edit is retained. Compare it, then save again.'); void drain();
+    const released = queue.current.filter(value => {
+      const retained = retainedRows.current.get(value.key);
+      const current = findItem(sheetRef.current!, value.key);
+      return value.key === job.key || retained && (!current || current.section_id !== retained.section_id);
+    });
+    queue.current = queue.current.filter(value => !released.includes(value));
+    released.forEach(value => value.resolve?.(false));
+    setJobs(previous => { const next = { ...previous }; released.forEach(value => { delete next[value.key]; }); return next; });
+    setNotice(dirtyRef.current.size ? 'Latest saved values loaded. Your unsaved edits remain in their rows or form. Compare them, then save or discard.' : 'Latest saved values loaded. Review the current sheet before trying again.'); void drain();
   };
   const feedback = (key: string) => {
     const job = jobs[key];
@@ -122,7 +140,14 @@ export function MonthlySheet({ api, signedIn, onDirty, onLogout }: { api: ApiCli
     setCurrencyJob({ command, running: true, uncertain });
     try {
       await command.run(); await settings.refetch(); await load(); setCurrencyJob(undefined); setNotice('Currency saved.');
-    } catch (error) { setCurrencyJob({ command, running: false, uncertain: uncertain || isUncertain(error), error }); }
+    } catch (error) { setCurrencyJob({ command, running: false, uncertain: error instanceof ApiError && error.status === 412 ? false : uncertain || isUncertain(error), error }); }
+  };
+  const itemsIn = (section: Section) => {
+    const items = section.items.filter(item => !retainedRows.current.has(item.id) || retainedRows.current.get(item.id)!.section_id === section.id);
+    for (const retained of retainedRows.current.values()) {
+      if (retained.section_id === section.id && !items.some(item => item.id === retained.id)) items.push(findItem(sheet!, retained.id) ?? retained);
+    }
+    return items;
   };
   return <div className="sheet-shell"><a className="skip-link" href="#main">Skip to content</a>
     <header className="sheet-topbar"><div className="brand"><span className="brand-mark" aria-hidden="true">f</span>Folio</div>
@@ -133,11 +158,11 @@ export function MonthlySheet({ api, signedIn, onDirty, onLogout }: { api: ApiCli
     </header>
     <main id="main" className="sheet-main" tabIndex={-1}>
       {settingsOpen && <div className="settings"><h2>Settings</h2><p className="quiet">One currency for your sheet. Currency cannot change after an amount is saved.</p>
-        {settings.data && <Form submit="Save currency" disabled={blocked || loading} defaults={{ currency: settings.data.currency }} fields={[{ name: 'currency', label: 'Currency', required: true, hint: `Current currency: ${settings.data.currency}. Confirm this before entering your first amount.` }]} onSubmit={async values => {
+        {settings.data && <Form submit="Save currency" disabled={blocked || loading || !sheet || sheet.currency_locked} defaults={{ currency: settings.data.currency }} fields={[{ name: 'currency', label: 'Currency', required: true, hint: sheet?.currency_locked ? `Current currency: ${settings.data.currency}. Currency is locked by saved financial data.` : `Current currency: ${settings.data.currency}. Check this before entering your first amount.` }]} onSubmit={async values => {
           const command = api.command<'Settings'>('/settings', { currency: text(values, 'currency').toUpperCase(), timezone: settings.data!.timezone }, { method: 'PATCH', version: settings.data!.version });
           await saveCurrency(command);
         }} />}
-        {currencyJob && <div className="notice" role="status">{currencyJob.running ? 'Saving currency…' : errorMessage(currencyJob.error)}{!currencyJob.running && <div className="actions"><button onClick={() => void saveCurrency(currencyJob.command)}>Retry same currency action</button>{!currencyJob.uncertain && <button onClick={() => setCurrencyJob(undefined)}>Edit currency</button>}</div>}</div>}
+        {currencyJob && <div className="notice" role="status">{currencyJob.running ? 'Saving currency…' : errorMessage(currencyJob.error)}{!currencyJob.running && <div className="actions"><button onClick={() => void saveCurrency(currencyJob.command)}>Retry same currency action</button>{!currencyJob.uncertain && <button onClick={async () => { if (await load()) { await settings.refetch(); setCurrencyJob(undefined); } }}>Edit currency</button>}</div>}</div>}
         <div className="actions"><button onClick={async () => {
           try {
             const result = await api.get<'Export'>('/exports');
@@ -151,6 +176,7 @@ export function MonthlySheet({ api, signedIn, onDirty, onLogout }: { api: ApiCli
       {notice && <p className="notice" role="status">{notice}</p>}
       {loadError != null && <div className="notice error" role="alert">{sheet ? 'Saved data may be stale. ' : ''}{errorMessage(loadError)} <button onClick={() => void load(loadedMonth.current !== month)}>Retry loading</button></div>}
       {sheet && <>
+        {!sheet.currency_locked && <p className="notice">Currency: {sheet.currency}. Check this before saving your first amount. <button onClick={() => setSettingsOpen(true)}>Change currency</button></p>}
         <section className="remainder" aria-label="Monthly summary"><h1>Monthly remainder</h1><output className="hero-amount">{money(sheet.remainder_minor)}</output>
           <dl className="totals"><div><dt>Money in</dt><dd>{money(sheet.money_in_minor)}</dd></div><div><dt>Money out</dt><dd>{money(sheet.money_out_minor)}</dd></div></dl>
           <p className="coverage">Based on entered amounts.{sheet.missing_count > 0 ? ` ${sheet.missing_count} ${sheet.missing_count === 1 ? 'item still blank' : 'items still blank'}.` : ' All listed amounts entered.'}</p>
@@ -162,8 +188,8 @@ export function MonthlySheet({ api, signedIn, onDirty, onLogout }: { api: ApiCli
           {sheet.sections.filter(section => section.direction === direction).map(section => <section className="sheet-section" key={section.id} aria-label={section.name}>
             <div className="section-heading"><h3>{section.name}</h3><output aria-label={`${section.name} subtotal`}>{money(section.total_minor)}</output></div>
             {section.amount_label === 'Bill amount' && <p className="amount-caption">Bill amount</p>}
-            {section.items.map(item => <ItemRow key={`${month}-${item.id}`} item={item} section={section} sheet={sheet} api={api} available={Boolean(available)} locked={locked(item.id)} feedback={feedback(item.id)} perform={perform} markDirty={markDirty} />)}
-            {!section.items.length && <p className="empty">Add your first item.</p>}
+            {itemsIn(section).map(item => <ItemRow key={`${month}-${item.id}`} item={item} section={section} sheet={sheet} api={api} available={Boolean(available)} locked={locked(item.id) || locked(`${item.id}-restore`)} feedback={<>{feedback(item.id)}{feedback(`${item.id}-restore`)}</>} perform={perform} markDirty={markDirty} />)}
+            {!itemsIn(section).length && <p className="empty">Add your first item.</p>}
             <div className="section-actions">{section.items.some(item => item.repeat_monthly && item.amount_minor == null && item.usual_amount_minor != null) && <button className="quiet-button" disabled={blocked || !available} onClick={() => void perform(`usual-${section.id}`, latest => api.command<'MonthlySheet'>(`/monthly-sheets/${month}/usual-amounts`, { section_id: section.id }, { version: latest.version }))}>Use usual amounts</button>}
               <button id={`add-${section.id}`} className="quiet-button" disabled={!available || addSection !== null || Boolean(currencyJob)} onClick={() => { setAddSection(section.id); markDirty('add', true); }}>Add item<span className="sr-only"> to {section.name}</span></button></div>
             {feedback(`usual-${section.id}`)}
@@ -196,37 +222,53 @@ function ItemRow({ item, section, sheet, api, available, locked, feedback, perfo
   const edited = useRef(false);
   const [error, setError] = useState('');
   const [details, setDetails] = useState(false);
+  const current = findItem(sheet, item.id);
+  const placementChanged = !current || current.section_id !== section.id;
+  const saveEdit = (build: Job['build'], done: Job['done']) => {
+    if (!current) {
+      // Restore only after explicit reapply, then merge the draft into the
+      // restored server row so concurrent saved notes remain intact.
+      void perform(`${item.id}-restore`, latest => api.command<'MonthlySheet'>(`/monthly-sheets/${sheet.month}/items/${item.id}/restore`, {}, { version: latest.version }), () => { void perform(item.id, build, done); });
+    } else void perform(item.id, build, done);
+  };
   useEffect(() => { if (!edited.current) setValue(moneyInput(item.amount_minor, sheet.currency_exponent)); }, [item.amount_minor, sheet.currency_exponent]);
   const clean = (result: Sheet) => {
     edited.current = false; markDirty(item.id, false); setError('');
     const saved = findItem(result, item.id);
     if (saved) setValue(moneyInput(saved.amount_minor, sheet.currency_exponent));
   };
-  const save = () => {
-    if (!edited.current || locked || !available) return;
+  const save = (explicit = false) => {
+    if (!edited.current || locked || !available || placementChanged && !explicit) return;
     let minor: string | null;
     try { minor = value.trim() === '' ? null : amount(value, sheet.currency_exponent); }
     catch (error) { setError(errorMessage(error)); return; }
-    void perform(item.id, latest => api.command<'MonthlySheet'>(`/monthly-sheets/${sheet.month}/items/${item.id}`, { ...updateInput(findItem(latest, item.id)), amount_minor: minor }, { method: 'PUT', version: latest.version }), clean);
+    saveEdit(latest => api.command<'MonthlySheet'>(`/monthly-sheets/${sheet.month}/items/${item.id}`, { ...updateInput(findItem(latest, item.id)), amount_minor: minor }, { method: 'PUT', version: latest.version }), clean);
   };
   return <div className="sheet-row" data-item={item.id}>
     <button id={`item-${item.id}`} className="item-name" aria-expanded={details} onClick={() => setDetails(true)} disabled={locked}>{item.name}{item.repeat_monthly && <span className="monthly-label">Monthly</span>}</button>
     <div><label className="sr-only" htmlFor={`amount-${item.id}`}>{section.amount_label} for {item.name}</label><input id={`amount-${item.id}`} className="amount-field" inputMode="decimal" autoComplete="off" value={value} placeholder={item.usual_amount_minor != null && item.repeat_monthly ? `Usual ${moneyInput(item.usual_amount_minor, sheet.currency_exponent)}` : 'Not entered'} disabled={locked} aria-invalid={Boolean(error) || undefined} aria-describedby={error ? `error-${item.id}` : undefined} onChange={event => {
       edited.current = true; markDirty(item.id, true); setValue(event.target.value); setError('');
-    }} onBlur={save} onKeyDown={event => {
-      if (event.key !== 'Enter') return;
-      event.preventDefault(); save();
-      const fields = Array.from(document.querySelectorAll<HTMLInputElement>('.amount-field'));
-      fields[fields.indexOf(event.currentTarget) + 1]?.focus();
+    }} onBlur={event => { if (!(event.relatedTarget instanceof HTMLElement && event.relatedTarget.dataset.discardAmount === item.id)) save(); }} onKeyDown={event => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        const target = edited.current ? document.querySelector<HTMLElement>(`[data-discard-amount="${item.id}"]`) : document.getElementById(`item-${item.id}`);
+        target?.focus(); return;
+      }
+      if (event.key !== 'Enter' && event.key !== 'Tab') return;
+      const fields = Array.from(document.querySelectorAll<HTMLInputElement>('.amount-field:not(:disabled)'));
+      const next = fields[fields.indexOf(event.currentTarget) + (event.shiftKey ? -1 : 1)];
+      if (next) { event.preventDefault(); next.focus(); }
+      else if (event.key === 'Enter') { event.preventDefault(); save(true); }
     }} /></div>
     {error && <div className="row-status error" id={`error-${item.id}`} role="alert">{error}</div>}
     {feedback}
-    {edited.current && !locked && <div className="row-status">Saved amount: {item.amount_minor == null ? 'Not entered' : formatMoney(item.amount_minor, sheet.currency, sheet.currency_exponent)}<div><button onClick={save} disabled={!available}>Save amount</button><button onClick={() => { edited.current = false; markDirty(item.id, false); setValue(moneyInput(item.amount_minor, sheet.currency_exponent)); setError(''); }}>Discard edit</button></div></div>}
-    {details && <ItemDetails item={item} sheet={sheet} api={api} perform={perform} disabled={locked || !available || edited.current} markDirty={markDirty} onClose={() => setDetails(false)} clean={clean} />}
+    {placementChanged && <p className="row-status">{current ? `Moved to ${sheet.sections.find(section => section.id === current.section_id)?.name} in another tab.` : 'Skipped in another tab.'} Your unsaved edits remain here. Save to reapply or discard them.</p>}
+    {edited.current && !locked && <div className="row-status">Saved amount: {!current || item.amount_minor == null ? 'Not entered' : formatMoney(item.amount_minor, sheet.currency, sheet.currency_exponent)}<div><button onClick={() => save(true)} disabled={!available}>{current ? 'Save amount' : 'Restore and reapply amount'}</button><button data-discard-amount={item.id} onClick={() => { edited.current = false; markDirty(item.id, false); setValue(moneyInput(item.amount_minor, sheet.currency_exponent)); setError(''); requestAnimationFrame(() => document.getElementById(`item-${item.id}`)?.focus()); }}>Discard edit</button></div></div>}
+    {details && <ItemDetails item={item} sheet={sheet} api={api} perform={perform} saveEdit={saveEdit} disabled={locked || !available || edited.current} markDirty={markDirty} onClose={() => { setDetails(false); requestAnimationFrame(() => document.getElementById(`item-${item.id}`)?.focus()); }} clean={clean} />}
   </div>;
 }
-function ItemDetails({ item, sheet, api, perform, disabled, markDirty, onClose, clean }: {
-  item: Item; sheet: Sheet; api: ApiClient; perform: Perform; disabled: boolean; markDirty(key: string, value: boolean): void; onClose(): void; clean(sheet: Sheet): void;
+function ItemDetails({ item, sheet, api, perform, saveEdit, disabled, markDirty, onClose, clean }: {
+  item: Item; sheet: Sheet; api: ApiClient; perform: Perform; saveEdit(build: Job['build'], done: Job['done']): void; disabled: boolean; markDirty(key: string, value: boolean): void; onClose(): void; clean(sheet: Sheet): void;
 }) {
   const [name, setName] = useState(item.name);
   const [note, setNote] = useState(item.note);
@@ -234,25 +276,31 @@ function ItemDetails({ item, sheet, api, perform, disabled, markDirty, onClose, 
   const [usual, setUsual] = useState(moneyInput(item.usual_amount_minor, sheet.currency_exponent));
   const [error, setError] = useState('');
   const dirtyKey = `${item.id}-details`;
-  const changed = () => markDirty(dirtyKey, true);
+  const changedFields = useRef(new Set<keyof S['MonthlyItemUpdate']>());
+  const changed = (field: keyof S['MonthlyItemUpdate']) => { changedFields.current.add(field); markDirty(dirtyKey, true); };
   const done = (result: Sheet) => { clean(result); markDirty(dirtyKey, false); onClose(); };
   const inputId = useId();
   return <div className="item-details"><form onSubmit={event => {
     event.preventDefault(); setError('');
     try {
       const usualMinor = repeat && usual.trim() ? amount(usual, sheet.currency_exponent) : null;
-      void perform(item.id, latest => api.command<'MonthlySheet'>(`/monthly-sheets/${sheet.month}/items/${item.id}`, { ...updateInput(findItem(latest, item.id)), name, note, repeat_monthly: repeat, usual_amount_minor: usualMinor }, { method: 'PUT', version: latest.version }), done);
+      const edits = { name, note, repeat_monthly: repeat, usual_amount_minor: usualMinor };
+      saveEdit(latest => {
+        const input = updateInput(findItem(latest, item.id));
+        for (const field of Object.keys(edits) as (keyof typeof edits)[]) if (changedFields.current.has(field)) Object.assign(input, { [field]: edits[field] });
+        return api.command<'MonthlySheet'>(`/monthly-sheets/${sheet.month}/items/${item.id}`, input, { method: 'PUT', version: latest.version });
+      }, done);
     } catch (error) { setError(errorMessage(error)); }
   }}><fieldset disabled={disabled}>
-    <div className="field"><label htmlFor={`${inputId}-name`}>Name</label><input id={`${inputId}-name`} value={name} required onChange={event => { setName(event.target.value); changed(); }} /></div>
-    <div className="field"><label htmlFor={`${inputId}-note`}>Notes</label><textarea id={`${inputId}-note`} rows={2} value={note} onChange={event => { setNote(event.target.value); changed(); }} /></div>
-    <div className="check-field"><input id={`${inputId}-repeat`} type="checkbox" role="switch" checked={repeat} onChange={event => { setRepeat(event.target.checked); changed(); }} /><label htmlFor={`${inputId}-repeat`}>Repeat monthly</label></div>
-    {repeat && <><p className="quiet">Appears each month. Enter the amount when you know it.</p><div className="field"><label htmlFor={`${inputId}-usual`}>Usual amount</label><input id={`${inputId}-usual`} inputMode="decimal" value={usual} onChange={event => { setUsual(event.target.value); changed(); }} /><small>Optional suggestion. Existing monthly amounts stay as entered.</small></div></>}
+    <div className="field"><label htmlFor={`${inputId}-name`}>Name</label><input id={`${inputId}-name`} autoFocus value={name} required onChange={event => { setName(event.target.value); changed('name'); }} /></div>
+    <div className="field"><label htmlFor={`${inputId}-note`}>Notes</label><textarea id={`${inputId}-note`} rows={2} value={note} onChange={event => { setNote(event.target.value); changed('note'); }} /></div>
+    <div className="check-field"><input id={`${inputId}-repeat`} type="checkbox" role="switch" checked={repeat} onChange={event => { setRepeat(event.target.checked); changed('repeat_monthly'); changed('usual_amount_minor'); }} /><label htmlFor={`${inputId}-repeat`}>Repeat monthly</label></div>
+    {repeat && <><p className="quiet">Appears each month. Enter the amount when you know it.</p><div className="field"><label htmlFor={`${inputId}-usual`}>Usual amount</label><input id={`${inputId}-usual`} inputMode="decimal" value={usual} onChange={event => { setUsual(event.target.value); changed('usual_amount_minor'); }} /><small>Optional suggestion. Existing monthly amounts stay as entered.</small></div></>}
     {error && <p className="error" role="alert">{error}</p>}
-    <div className="actions"><button className="primary">Save details</button><button type="button" onClick={() => { markDirty(dirtyKey, false); onClose(); }}>Cancel</button></div>
-    <div className="actions"><button type="button" disabled={item.amount_minor == null} onClick={() => void perform(item.id, latest => api.command<'MonthlySheet'>(`/monthly-sheets/${sheet.month}/items/${item.id}`, { ...updateInput(findItem(latest, item.id)), amount_minor: null }, { method: 'PUT', version: latest.version }), done)}>Clear amount</button>
-      <button type="button" onClick={() => void perform(item.id, latest => api.command<'MonthlySheet'>(`/monthly-sheets/${sheet.month}/items/${item.id}/remove`, {}, { version: latest.version }), done)}>Skip this month</button>
-      {item.repeat_monthly && <button type="button" onClick={() => void perform(item.id, latest => api.command<'MonthlySheet'>(`/monthly-sheets/${sheet.month}/items/${item.id}`, { ...updateInput(findItem(latest, item.id)), repeat_monthly: false, usual_amount_minor: null }, { method: 'PUT', version: latest.version }), done)}>Stop repeating</button>}
+    <div className="actions"><button className="primary">{findItem(sheet, item.id) ? 'Save details' : 'Restore and reapply details'}</button><button type="button" onClick={() => { markDirty(dirtyKey, false); onClose(); }}>Cancel</button></div>
+    <div className="actions"><button type="button" disabled={!findItem(sheet, item.id) || item.amount_minor == null} onClick={() => void perform(item.id, latest => api.command<'MonthlySheet'>(`/monthly-sheets/${sheet.month}/items/${item.id}`, { ...updateInput(findItem(latest, item.id)), amount_minor: null }, { method: 'PUT', version: latest.version }), done)}>Clear amount</button>
+      <button type="button" disabled={!findItem(sheet, item.id)} onClick={() => void perform(item.id, latest => api.command<'MonthlySheet'>(`/monthly-sheets/${sheet.month}/items/${item.id}/remove`, {}, { version: latest.version }), done)}>Skip this month</button>
+      {item.repeat_monthly && <button type="button" disabled={!findItem(sheet, item.id)} onClick={() => void perform(item.id, latest => api.command<'MonthlySheet'>(`/monthly-sheets/${sheet.month}/items/${item.id}`, { ...updateInput(findItem(latest, item.id)), repeat_monthly: false, usual_amount_minor: null }, { method: 'PUT', version: latest.version }), done)}>Stop repeating</button>}
     </div><p className="quiet">Skipping removes this month's row. History stays saved. Stop repeating ends future automatic rows.</p>
   </fieldset></form></div>;
 }

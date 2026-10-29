@@ -94,6 +94,7 @@ type MonthlySheet struct {
 	Version          int64            `json:"version"`
 	Currency         string           `json:"currency"`
 	CurrencyExponent int              `json:"currency_exponent"`
+	CurrencyLocked   bool             `json:"currency_locked"`
 	HasLegacyData    bool             `json:"has_legacy_data"`
 	UndoToken        *string          `json:"undo_token"`
 	MoneyInMinor     Money            `json:"money_in_minor"`

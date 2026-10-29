@@ -83,7 +83,7 @@ Custom sections have amount_label `Amount`. Renaming retains direction and label
 ```json
 {
   "month":"2026-10","version":1,"currency":"SGD","currency_exponent":2,
-  "has_legacy_data":false,"undo_token":null,
+  "currency_locked":false,"has_legacy_data":false,"undo_token":null,
   "money_in_minor":"0","money_out_minor":"0","remainder_minor":"0","missing_count":0,
   "sections":[{
     "id":"UUID","name":"Credit cards","direction":"out","amount_label":"Bill amount",
@@ -131,6 +131,9 @@ or old summary contributes. `has_legacy_data` indicates retained old financial d
 sections, item identities and aliases, effective preferences, all monthly rows,
 skips, version and latest Undo state. Currency locks once any monthly or usual
 amount exists, including zero or a removed amount. No migration is inferred.
+`currency_locked` reports the same owner-wide immutability predicate used by
+Settings, including retained legacy financial setup. An empty selected month
+does not imply that currency can change.
 
 ## Validation evidence
 

@@ -40,6 +40,43 @@ func monthlyUpdate(t *testing.T, s *State, month, id string) MonthlyItemUpdate {
 	return MonthlyItemUpdate{row.SectionID, item.Name, row.AmountMinor, row.Note, p.RepeatMonthly, p.UsualAmountMinor}
 }
 
+func TestMonthlySheetReportsCurrencyLockAcrossMonths(t *testing.T) {
+	for _, setup := range []struct {
+		name   string
+		locked bool
+		apply  func(*State)
+	}{
+		{"empty", false, func(s *State) {}},
+		{"blank", false, func(s *State) { monthlyAdd(t, s, "2026-10", monthlyIncome, "Blank", nil, false, nil) }},
+		{"historical zero", true, func(s *State) { monthlyAdd(t, s, "2026-10", monthlyIncome, "Zero", monthlyAmount(0), false, nil) }},
+		{"removed", true, func(s *State) {
+			id := monthlyAdd(t, s, "2026-10", monthlyIncome, "Removed", monthlyAmount(1), false, nil)
+			_, err := s.RemoveMonthlyItem("2026-10", id, true, s.MonthlySheet.Version)
+			monthlyCheck(t, err)
+		}},
+		{"usual only", true, func(s *State) { monthlyAdd(t, s, "2026-10", monthlyIncome, "Usual", nil, true, monthlyAmount(1)) }},
+		{"legacy setup", true, func(s *State) { s.LegacySummaries = append(s.LegacySummaries, LegacySummary{Meta: NewMeta()}) }},
+	} {
+		t.Run(setup.name, func(t *testing.T) {
+			s := NewState()
+			setup.apply(s)
+			sheet, err := s.OpenMonthlySheet("2026-11")
+			monthlyCheck(t, err)
+			encoded, err := json.Marshal(sheet)
+			monthlyCheck(t, err)
+			var fields map[string]json.RawMessage
+			monthlyCheck(t, json.Unmarshal(encoded, &fields))
+			if string(fields["currency_locked"]) != map[bool]string{true: "true", false: "false"}[setup.locked] {
+				t.Fatalf("currency_locked missing or incorrect in later month: %s", encoded)
+			}
+			_, err = s.UpdateSettings(SettingsInput{"JPY", "UTC"}, s.Settings.Version)
+			if (err != nil) != setup.locked {
+				t.Fatalf("lock differs from settings immutability: %v", err)
+			}
+		})
+	}
+}
+
 func TestMonthlySheetTotalsBlankZeroAndLegacySeparation(t *testing.T) {
 	s := NewState()
 	// Synthetic amounts; legacy review state must not affect monthly editing.

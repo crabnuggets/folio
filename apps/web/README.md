@@ -30,9 +30,12 @@ amounts. Repeat monthly is optional and off for new names. Fixed recurring amoun
 can have a usual suggestion; applying suggestions fills only blank rows.
 
 Edit a row's amount directly. Blur or Enter saves; Tab and Enter move between
-amounts. Blank differs from an explicit zero. Item names open notes, rename,
-recurrence and usual-amount details. Skip this month retains history and recurrence;
-Stop repeating ends future automatic rows. Clear and skip offer Undo.
+amounts. Shift+Tab moves to the previous amount; Tab exits normally at either
+boundary. Escape focuses Discard edit for an unsaved amount, or the item name
+otherwise. Enter on the item name opens and focuses details. Blank differs from
+an explicit zero. Details contain notes, rename, recurrence and usual amounts.
+Skip this month retains history and recurrence; Stop repeating ends future
+automatic rows. Clear and skip offer Undo.
 
 Sheet options add or rename sections. Settings contains currency, export and
 sign-out. Old financial data stays separate and remains in the lossless export.

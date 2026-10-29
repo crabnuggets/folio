@@ -25105,6 +25105,9 @@
             "minimum": 0,
             "maximum": 4
           },
+          "currency_locked": {
+            "type": "boolean"
+          },
           "has_legacy_data": {
             "type": "boolean"
           },
@@ -25143,6 +25146,7 @@
           "version",
           "currency",
           "currency_exponent",
+          "currency_locked",
           "has_legacy_data",
           "undo_token",
           "money_in_minor",
