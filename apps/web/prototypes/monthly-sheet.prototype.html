@@ -1,0 +1,156 @@
+<!doctype html>
+<!-- Throwaway flow prototype: can reusable monthly items replace the current accounting workflows?
+     Sample figures only. Open directly, no server. No API calls or persistence. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Folio monthly sheet flow prototype</title>
+<style>
+:root{color-scheme:light;--background:transparent;--foreground:#142020;--muted:#526363;--card:#fff;--secondary:#edf2f2;--border:#dce5e5;--ring:#087f8c;--primary:#087f8c;--primary-foreground:#fff;--warning:#8a4b08;--destructive:#b42318;--radius:16px;--font-sans:Inter,system-ui,sans-serif}
+*{box-sizing:border-box}body{margin:0;font:15px/1.5 var(--font-sans);color:var(--foreground)}button,input,select{font:inherit;color:inherit}button,summary,select{cursor:pointer}button{min-height:42px;border:1px solid var(--border);border-radius:9px;background:var(--card);padding:7px 12px}button:hover{border-color:var(--ring)}button:disabled{opacity:.5;cursor:default}input,select{min-height:42px;border:1px solid var(--border);border-radius:8px;background:var(--card);padding:8px;min-width:0}input:focus,button:focus-visible,summary:focus-visible,select:focus{outline:2px solid var(--ring);outline-offset:2px}input[type=checkbox]{min-height:18px;accent-color:var(--primary)}label{display:grid;gap:5px}small,.muted{color:var(--muted)}h1,h2,h3,p{margin:0}h1{font-size:22px;letter-spacing:-.5px}h2{font-size:18px}h3{font-size:15px;font-weight:600}p+p{margin-top:8px}.intro{margin-bottom:18px}.intro p{font-size:14px;color:var(--muted)}.intro strong{font-weight:600;color:var(--foreground)}.demo-tools{margin-bottom:20px;background:var(--secondary);padding:14px 16px;border-radius:var(--radius)}.demo-tools>summary{font-weight:600}.guide-tabs{display:flex;gap:6px;flex-wrap:wrap;margin:12px 0}.guide-tabs button[aria-selected=true]{background:var(--primary);color:var(--primary-foreground);border-color:var(--primary)}.guide-desc{margin:10px 0;font-size:14px}.steps{display:flex;gap:6px;flex-wrap:wrap}.steps button{font-size:13px}.topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:20px}.brand{font-size:20px;font-weight:650}.month-picker{display:flex;align-items:center;gap:8px}.month-picker strong{min-width:130px;text-align:center}.hero{padding:22px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:20px}.hero-label{font-size:14px;color:var(--muted)}.big{font-size:38px;font-weight:600;letter-spacing:-1.2px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}.totals{display:flex;gap:30px;margin-top:12px}.totals span{display:block;font-size:13px;color:var(--muted)}.totals strong{font-size:18px;font-variant-numeric:tabular-nums}.coverage{font-size:13px;color:var(--muted);margin-top:14px}.coverage.incomplete{color:var(--warning)}.sheet{display:grid;grid-template-columns:1fr 1fr;gap:18px}.side{min-width:0}.side-title{display:flex;justify-content:space-between;align-items:center;margin:0 0 10px}.side-total{font-size:14px;font-weight:500}.section{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:14px;padding:14px}.section-header{display:flex;gap:10px;align-items:baseline;justify-content:space-between;margin-bottom:10px}.subtotal{font-size:13px;color:var(--muted);white-space:nowrap;font-variant-numeric:tabular-nums}.row{border-top:1px solid var(--border);padding:9px 0}.row-main{display:grid;grid-template-columns:minmax(0,1fr) 108px;align-items:center;gap:8px}.item-name{background:none;border:0;border-radius:4px;padding:4px 0;text-align:left;font-size:14px;line-height:1.4;min-height:42px;overflow-wrap:anywhere}.item-name:hover{text-decoration:underline;text-underline-offset:4px}.amount{width:100%;text-align:right;font-variant-numeric:tabular-nums;font-size:15px}.amount::placeholder{color:var(--muted);opacity:1}.amount:invalid{border-color:var(--destructive)}.row-hint{font-size:11px;color:var(--muted);margin-top:2px}.item-details{display:grid;gap:10px;padding:10px 0 2px;font-size:13px}.item-details[hidden]{display:none}.check{display:flex;align-items:center;gap:8px}.detail-actions{display:flex;gap:6px;flex-wrap:wrap}.link{background:transparent;border:0;padding:5px 0;min-height:38px;color:var(--primary);font-size:13px}.actions{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}.primary{background:var(--primary);color:var(--primary-foreground);border-color:var(--primary)}.add-form{display:grid;gap:10px;border-top:1px solid var(--border);margin-top:8px;padding-top:12px;font-size:13px}.notice{min-height:24px;margin:12px 0;color:var(--primary);font-size:13px}.footer{border-top:1px solid var(--border);padding-top:14px;font-size:13px;color:var(--muted)}.footer details{margin-top:10px}.customize{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.customize input{flex:1;min-width:160px}.prototype-note{font-size:12px;margin-top:16px;color:var(--muted)}
+@media(max-width:590px){.sheet{grid-template-columns:1fr}.big{font-size:34px}.hero{padding:18px}.topbar{align-items:flex-start}.month-picker{gap:4px}.month-picker strong{min-width:105px;font-size:13px}.month-picker button{padding:5px 9px}.row-main{grid-template-columns:minmax(0,1fr) 115px}.totals{gap:24px}}
+</style>
+</head>
+<body>
+<div class="intro"><p><strong>Flow prototype · sample amounts</strong></p><p>Can reusable monthly items cover your check-in with just a name and an amount? Edit the sheet, add a card, or try the guided examples. Changes reset on reload.</p></div>
+<details class="demo-tools" id="guides"><summary>Try the monthly flow</summary><div class="guide-tabs" role="tablist" aria-label="Guided examples"></div><p class="guide-desc" id="guide-description"></p><div class="steps" id="guide-steps"></div></details>
+<main id="app"></main>
+<p class="notice" role="status" aria-live="polite" id="notice"></p>
+<div class="footer"><p>Card amounts are bills for this month. Paying a bill does not add another outgoing.</p><details><summary>Customize sections</summary><form id="section-form" class="customize"><input name="name" aria-label="Section name" placeholder="Section name" required><select name="side" aria-label="Side"><option value="out">Money out</option><option value="in">Money in</option></select><button>Add section</button></form></details><p class="prototype-note">Throwaway concept. The monthly remainder is based on entered amounts, including savings and investments. It is not your bank balance. This demo uses $ as a sample currency.</p></div>
+<script>
+// Pure model. Amounts are integer cents; blank is null, an entered zero is 0.
+const sections = [
+  {id:'income',name:'Income',side:'in'}, {id:'other-in',name:'Other money in',side:'in'},
+  {id:'recurring',name:'Recurring expenses',side:'out'}, {id:'cards',name:'Credit cards',side:'out'},
+  {id:'other-out',name:'Other money out',side:'out'}
+];
+const sampleItems = [
+  {id:'salary',name:'Salary',section:'income',repeat:true,usual:null},
+  {id:'reimbursement',name:'Reimbursement',section:'other-in',repeat:false,usual:null},
+  {id:'personal',name:'Personal spending account top-up',section:'recurring',repeat:true,usual:70000},
+  {id:'house',name:'House savings',section:'recurring',repeat:true,usual:90000},
+  {id:'allowance',name:"Mummy's allowance",section:'recurring',repeat:true,usual:15000},
+  {id:'investment',name:'Investment',section:'recurring',repeat:true,usual:50000},
+  {id:'citi',name:'Citi Cash Back+ Card',section:'cards',repeat:true,usual:null},
+  {id:'maybank',name:'Maybank XL Cashback Card',section:'cards',repeat:true,usual:null},
+  {id:'car',name:'Car expenses',section:'other-out',repeat:false,usual:null}
+];
+const sampleAmounts = {salary:500000,reimbursement:25000,personal:70000,house:90000,allowance:15000,investment:50000,citi:62000,maybank:null,car:20000};
+const freshState = () => ({month:'2026-10',sections:structuredClone(sections),items:structuredClone(sampleItems),months:{'2026-10':structuredClone(sampleAmounts)}});
+function reduce(state, action) {
+  const next = structuredClone(state);
+  const amounts = next.months[next.month];
+  if(action.type==='amount') amounts[action.id]=action.amount;
+  if(action.type==='usual') for(const item of next.items) if(item.section===action.section && item.repeat && item.usual!==null && Object.hasOwn(amounts,item.id) && amounts[item.id]===null) amounts[item.id]=item.usual;
+  if(action.type==='add') {next.items.push(action.item);amounts[action.item.id]=action.amount;}
+  if(action.type==='section') next.sections.push(action.section);
+  if(action.type==='detail') Object.assign(next.items.find(item=>item.id===action.id),action.patch);
+  if(action.type==='remove') delete amounts[action.id];
+  if(action.type==='month') {
+    next.month=action.month;
+    if(!next.months[next.month]) next.months[next.month]=Object.fromEntries(next.items.filter(item=>item.repeat).map(item=>[item.id,null]));
+  }
+  return next;
+}
+function summarize(state) {
+  const amounts=state.months[state.month], totals={in:0,out:0,missing:0,sections:{}};
+  for(const section of state.sections) {
+    let total=0;
+    for(const item of state.items.filter(item=>item.section===section.id && Object.hasOwn(amounts,item.id))) {
+      if(amounts[item.id]===null) totals.missing++; else total+=amounts[item.id];
+    }
+    totals.sections[section.id]=total;totals[section.side]+=total;
+  }
+  totals.remainder=totals.in-totals.out; return totals;
+}
+
+// Thin, disposable UI shell.
+let state=freshState(), undo=null, detailId=null, addSection=null, scenario='checkin', step=0;
+const money = amount => new Intl.NumberFormat('en',{style:'currency',currency:'USD'}).format(amount/100);
+const escapeHtml = value => String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const decimal = amount => amount===null?'':(amount/100).toFixed(2);
+const toCents = value => value.trim()===''?null:Math.round(Number(value)*100);
+const notice = message => document.getElementById('notice').textContent=message;
+function dispatch(action,message) {undo=structuredClone(state);state=reduce(state,action);render();notice(message||'Updated in this demo.');}
+function render() {
+  const totals=summarize(state), amounts=state.months[state.month];
+  const monthLabel=new Intl.DateTimeFormat('en',{month:'long',year:'numeric',timeZone:'UTC'}).format(new Date(state.month+'-01T00:00:00Z'));
+  document.getElementById('app').innerHTML=`
+    <header class="topbar"><span class="brand">Folio</span><div class="month-picker"><button data-month="-1" aria-label="Previous month">‹</button><strong>${monthLabel}</strong><button data-month="1" aria-label="Next month">›</button></div></header>
+    <section class="hero" aria-label="Monthly summary"><h1 class="hero-label">Monthly remainder</h1><p class="big" id="summary-remainder">${money(totals.remainder)}</p><div class="totals"><div><span>Money in</span><strong id="summary-in">${money(totals.in)}</strong></div><div><span>Money out</span><strong id="summary-out">${money(totals.out)}</strong></div></div><p id="coverage" class="coverage ${totals.missing?'incomplete':''}">Based on entered amounts. ${totals.missing?`${totals.missing} item${totals.missing===1?' is':'s are'} still blank.`:'All current items have an amount.'}</p></section>
+    <div class="sheet">${['in','out'].map(side=>`<div class="side"><div class="side-title"><h2>Money ${side}</h2></div>${state.sections.filter(section=>section.side===side).map(section=>renderSection(section,amounts,totals)).join('')}</div>`).join('')}</div>
+    <button class="link" id="undo" ${undo?'':'disabled'}>Undo last change</button>`;
+  bindSheet();
+}
+function renderSection(section,amounts,totals) {
+  const items=state.items.filter(item=>item.section===section.id && Object.hasOwn(amounts,item.id));
+  const canUse=items.some(item=>item.repeat && item.usual!==null && amounts[item.id]===null);
+  return `<section class="section"><div class="section-header"><h3>${escapeHtml(section.name)}</h3><span class="subtotal" data-total="${section.id}">${money(totals.sections[section.id])}</span></div>${items.map(item=>`
+    <div class="row"><div class="row-main"><button class="item-name" data-details="${item.id}" aria-expanded="${detailId===item.id}">${escapeHtml(item.name)}</button><input class="amount" inputmode="decimal" type="number" min="0" step="0.01" value="${decimal(amounts[item.id])}" placeholder="Enter" aria-label="${escapeHtml(item.name)} ${section.id==='cards'?'bill amount':'monthly amount'}" data-amount="${item.id}"></div>
+    ${section.id==='cards'?'<div class="row-hint">Bill amount</div>':item.repeat&&item.usual!==null?`<div class="row-hint">Usual ${money(item.usual)}</div>`:''}
+    <div class="item-details" ${detailId===item.id?'':'hidden'}><label>Name<input value="${escapeHtml(item.name)}" data-rename="${item.id}"></label><label>Note<input value="${escapeHtml(item.note||'')}" placeholder="Optional" data-note="${item.id}"></label><label class="check"><input type="checkbox" ${item.repeat?'checked':''} data-repeat="${item.id}">Use every month</label>${section.id==='cards'?'':`<label>Usual amount<input type="number" min="0" step="0.01" inputmode="decimal" value="${decimal(item.usual)}" placeholder="Optional" data-usual="${item.id}"></label>`}<button class="link" data-remove="${item.id}">Remove from this month</button></div></div>`).join('')}
+    <div class="actions"><button class="link" data-add="${section.id}">+ Add item</button><button class="link" data-fill="${section.id}" ${canUse?'':'hidden'}>Use usual amounts</button></div>
+    ${addSection===section.id?`<form class="add-form" data-add-form="${section.id}"><label>Name<input name="name" placeholder="${section.id==='cards'?'Card name':'Item name'}" required></label><label>${section.id==='cards'?'Bill amount':'Amount'}<input name="amount" type="number" min="0" step="0.01" inputmode="decimal" required></label><div class="detail-actions"><button class="primary">Save item</button><button type="button" id="cancel-add">Cancel</button></div><small>${section.id==='cards'?'The card name will be reused next month. Its amount starts blank.':'Notes and reuse options are available after adding.'}</small></form>`:''}</section>`;
+}
+function bindSheet() {
+  const app=document.getElementById('app');
+  app.querySelectorAll('[data-month]').forEach(button=>button.onclick=()=>{const date=new Date(state.month+'-01T00:00:00Z');date.setUTCMonth(date.getUTCMonth()+Number(button.dataset.month));detailId=null;addSection=null;dispatch({type:'month',month:date.toISOString().slice(0,7)},'Month opened. New monthly amounts start blank.');});
+  app.querySelectorAll('[data-amount]').forEach(input=>{
+    input.onchange=()=>{
+      if(!input.checkValidity()) return input.reportValidity();
+      undo=structuredClone(state);state=reduce(state,{type:'amount',id:input.dataset.amount,amount:toCents(input.value)});
+      const totals=summarize(state), amounts=state.months[state.month];
+      for(const key of ['in','out','remainder']) document.getElementById('summary-'+key).textContent=money(totals[key]);
+      const coverage=document.getElementById('coverage');coverage.classList.toggle('incomplete',totals.missing>0);coverage.textContent='Based on entered amounts. '+(totals.missing?`${totals.missing} item${totals.missing===1?' is':'s are'} still blank.`:'All current items have an amount.');
+      app.querySelectorAll('[data-total]').forEach(total=>total.textContent=money(totals.sections[total.dataset.total]));
+      app.querySelectorAll('[data-fill]').forEach(button=>button.hidden=!state.items.some(item=>item.section===button.dataset.fill&&item.repeat&&item.usual!==null&&Object.hasOwn(amounts,item.id)&&amounts[item.id]===null));
+      app.querySelector('#undo').disabled=false;notice('Monthly amount updated.');
+    };
+    input.onkeydown=event=>{if(event.key==='Enter'){event.preventDefault();const id=input.dataset.amount;input.blur();const inputs=[...document.querySelectorAll('[data-amount]')];const index=inputs.findIndex(candidate=>candidate.dataset.amount===id);inputs[index+1]?.focus();}};
+  });
+  app.querySelectorAll('[data-details]').forEach(button=>button.onclick=()=>{detailId=detailId===button.dataset.details?null:button.dataset.details;render();});
+  app.querySelectorAll('[data-fill]').forEach(button=>button.onclick=()=>dispatch({type:'usual',section:button.dataset.fill},'Blank recurring items filled. Existing amounts were kept.'));
+  for(const [attribute,key] of [['rename','name'],['note','note'],['repeat','repeat'],['usual','usual']]) app.querySelectorAll(`[data-${attribute}]`).forEach(input=>input.onchange=()=>{
+    if(!input.checkValidity()) return input.reportValidity();
+    const value=key==='repeat'?input.checked:key==='usual'?toCents(input.value):input.value.trim();
+    if(key==='name'&&!value) return;
+    dispatch({type:'detail',id:input.dataset[attribute],patch:{[key]:value}},key==='repeat'?'Reuse preference updated. Existing months kept.':'Item details updated.');
+  });
+  app.querySelectorAll('[data-remove]').forEach(button=>button.onclick=()=>dispatch({type:'remove',id:button.dataset.remove},'Removed from this month. Undo is available.'));
+  app.querySelectorAll('[data-add]').forEach(button=>button.onclick=()=>{addSection=button.dataset.add;render();document.querySelector('[data-add-form] input').focus();});
+  const form=app.querySelector('[data-add-form]');
+  if(form) form.onsubmit=event=>{event.preventDefault();const data=new FormData(form), section=form.dataset.addForm,name=String(data.get('name')).trim();if(!name) return;addSection=null;dispatch({type:'add',item:{id:crypto.randomUUID(),name,section,repeat:['cards','recurring','income'].includes(section),usual:null},amount:toCents(String(data.get('amount')))},'Item added. The totals now include it.');};
+  const cancel=app.querySelector('#cancel-add');if(cancel) cancel.onclick=()=>{addSection=null;render();};
+  app.querySelector('#undo').onclick=()=>{state=undo;undo=null;render();notice('Last change undone.');};
+}
+const scenarios={
+  checkin:{name:'Monthly check-in',description:'Start with reusable rows. Fill recurring amounts together, then enter salary and each bill.',setup:()=>{const s=freshState();s.months['2026-10']=Object.fromEntries(s.items.filter(item=>item.repeat).map(item=>[item.id,null]));return s;},steps:[
+    {label:'1. Use usual amounts',actions:[{type:'usual',section:'recurring'}],message:'Four recurring amounts entered together. Salary and bills are still blank.'},
+    {label:'2. Enter salary',actions:[{type:'amount',id:'salary',amount:500000}],message:'Salary entered. Both card amounts are still blank.'},
+    {label:'3. Enter Citi bill',actions:[{type:'amount',id:'citi',amount:62000}],message:'Citi bill entered. No statement dates or payment form.'},
+    {label:'4. Enter Maybank bill',actions:[{type:'amount',id:'maybank',amount:38000}],message:'Both bills entered. Paying them later adds no second outgoing.'}
+  ]},
+  card:{name:'Add a card',description:'A new card needs its name and bill amount. Its name will be available next month.',setup:()=>{const s=freshState();s.items=s.items.filter(item=>item.id!=='maybank');delete s.months['2026-10'].maybank;return s;},steps:[{label:'Add Maybank bill · $380',actions:[{type:'add',item:{id:'maybank',name:'Maybank XL Cashback Card',section:'cards',repeat:true,usual:null},amount:38000}],message:'Card added with two fields: name and bill amount. No account setup.'}]},
+  returned:{name:'Returned money',description:'Unused money returned from your personal spending account goes under money in. The top-up stays under money out.',setup:()=>{const s=freshState();s.months['2026-10'].maybank=38000;return s;},steps:[{label:'Add returned excess · $120',actions:[{type:'add',item:{id:'returned',name:'Personal spending account excess',section:'other-in',repeat:false,usual:null},amount:12000}],message:'Money in and the monthly remainder increased by $120. This is returned money, not salary.'}]},
+  next:{name:'Next month',description:'Reusable names carry over. Amounts stay blank until you enter them or use your usual amounts.',setup:()=>{const s=freshState();s.months['2026-10'].maybank=38000;return s;},steps:[
+    {label:'1. Open November',actions:[{type:'month',month:'2026-11'}],message:'Names carried over. October amounts were kept. One-off rows were not copied.'},
+    {label:'2. Use usual amounts',actions:[{type:'usual',section:'recurring'}],message:'Recurring amounts entered together. Salary and bills remain blank.'},
+    {label:'3. Enter a zero Citi bill',actions:[{type:'amount',id:'citi',amount:0}],message:'Citi now has an explicit zero bill. Maybank is still blank, which means no amount entered.'}
+  ]}
+};
+function renderGuide() {
+  document.querySelector('.guide-tabs').innerHTML=Object.entries(scenarios).map(([id,value])=>`<button role="tab" aria-selected="${id===scenario}" data-scenario="${id}">${value.name}</button>`).join('');
+  document.getElementById('guide-description').textContent=scenarios[scenario].description;
+  document.getElementById('guide-steps').innerHTML=scenarios[scenario].steps.map((value,index)=>`<button data-step="${index}" ${index!==step?'disabled':''}>${index<step?'Done: ':''}${value.label}</button>`).join('')+`<button id="restart">Restart example</button>`;
+  document.querySelectorAll('[data-scenario]').forEach(button=>button.onclick=()=>startScenario(button.dataset.scenario));
+  document.querySelectorAll('[data-step]').forEach(button=>button.onclick=()=>{const value=scenarios[scenario].steps[step];undo=structuredClone(state);for(const action of value.actions)state=reduce(state,action);step++;render();renderGuide();notice(value.message);});
+  document.getElementById('restart').onclick=()=>startScenario(scenario);
+}
+function startScenario(id){scenario=id;step=0;state=scenarios[id].setup();undo=null;detailId=null;addSection=null;render();renderGuide();notice('Example started. You can also edit the sheet freely.');}
+document.getElementById('guides').addEventListener('toggle',event=>{if(event.target.open&&step===0)startScenario(scenario);});
+document.getElementById('section-form').onsubmit=event=>{event.preventDefault();const form=event.currentTarget,data=new FormData(form),name=String(data.get('name')).trim();if(!name)return;dispatch({type:'section',section:{id:crypto.randomUUID(),name,side:String(data.get('side'))}},'Section added. Its subtotal will come from its items.');form.reset();};
+render();renderGuide();
+</script>
+</body>
+</html>

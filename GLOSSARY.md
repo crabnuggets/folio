@@ -1,5 +1,26 @@
 # Folio glossary
 
+## Monthly sheet language
+
+**Monthly sheet**:
+Named incoming and outgoing amounts assigned to one calendar month.
+
+**Section**:
+A heading organizing related items on a monthly sheet, with a subtotal calculated from those items.
+_Avoid_: Group.
+
+**Item**:
+A named thing tracked with a monthly amount, such as salary, house savings, or a credit card bill.
+_Avoid_: Record, transaction, account as a general name for every item.
+
+**Monthly amount**:
+The amount assigned to an item for a reporting month. For a credit card, this is the bill amount being accounted for that month, not the amount paid.
+
+**Monthly remainder**:
+The monthly sheet's entered incoming amounts minus its entered outgoing amounts, including savings and investment contributions. It is not a bank balance or a measure of consumption.
+
+## Financial terms
+
 | Term | Meaning |
 | --- | --- |
 | Reporting month | Calendar month to which an item contributes in the monthly plan; distinct from its actual payment date. |
