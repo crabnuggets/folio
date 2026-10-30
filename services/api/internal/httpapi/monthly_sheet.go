@@ -8,6 +8,9 @@ import (
 
 func monthlyMutate[T any](s *server, w http.ResponseWriter, r *http.Request, versioned bool, fn func(*domain.State, T, int64) (domain.MonthlySheet, error)) {
 	mutate(s, w, r, 200, versioned, func(st *domain.State, in T, v int64) (any, int64, error) {
+		if st.Settings.Currency != "SGD" {
+			return nil, 0, domain.Fail(409, "CURRENCY_LOCKED", "Historical non-SGD data is read-only; export preserves original amounts")
+		}
 		sheet, err := fn(st, in, v)
 		return sheet, sheet.Version, err
 	})

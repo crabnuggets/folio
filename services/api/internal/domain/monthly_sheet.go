@@ -364,7 +364,7 @@ func (s *State) UndoMonthlySheet(month string, in MonthlyUndoInput, expected int
 		return MonthlySheet{}, Fail(412, "STALE_VERSION", "This change can no longer be undone safely")
 	}
 	s.MonthlySheet.MonthlySheetData = u.Before
-	return s.monthlyFinish(month, before, false)
+	return s.monthlyFinish(month, before, true)
 }
 
 func (s *State) CreateMonthlySection(month string, in MonthlySectionInput, expected int64) (MonthlySheet, error) {

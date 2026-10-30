@@ -34,8 +34,8 @@ func (s *State) UpdateSettings(input SettingsInput, expected int64) (Settings, e
 		return Settings{}, err
 	}
 	exponent, ok := CurrencyExponent(input.Currency)
-	if !ok {
-		return Settings{}, Invalid("Unsupported currency")
+	if !ok || input.Currency != "SGD" {
+		return Settings{}, Invalid("Currency is fixed to SGD")
 	}
 	if input.Timezone == "" || input.Timezone == "Local" {
 		return Settings{}, Invalid("Timezone must be an IANA timezone")
