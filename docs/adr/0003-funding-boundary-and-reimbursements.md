@@ -2,6 +2,8 @@
 
 Status: Required workflow grounded in source inspection and user confirmation; detailed implementation is proposed. Date: 2026-10-26.
 
+The primary-workflow requirement is superseded by [ADR 0006](0006-monthly-sheet.md), following the user's request for a simpler monthly sheet and confirmation that card amounts are monthly bills. The funding model below remains applicable to retained legacy data.
+
 ## Evidence and change from ADR 0002
 
 The inspected workbook includes salary, reimbursements, recurring funding allocations, card amounts, and returned personal-spending excess in a monthly inflow/outflow calculation. The user explicitly confirmed that “Monthly expenses” is a transfer to a separate personal spending account and the excess is unused funds returned from it.

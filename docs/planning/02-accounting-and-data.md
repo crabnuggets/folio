@@ -1,6 +1,16 @@
 # Accounting and data contract
 
-This document is authoritative for financial semantics. Amounts in examples are fictional currency units. The application uses one configured currency initially; do not silently convert or add other currencies.
+The current monthly-sheet semantics are defined below and in [ADR 0006](../adr/0006-monthly-sheet.md). The remaining sections document retained legacy financial semantics. Amounts in examples are fictional currency units. The application uses one configured currency initially; do not silently convert or add other currencies.
+
+## Current monthly sheet
+
+An item contributes one nonnegative amount to its incoming or outgoing section in the selected month. A blank amount is unknown, contributes no entered amount, and is counted as missing; an explicit zero is known. Section subtotals sum active leaf items once. Money in and money out sum their respective section subtotals. `monthly_remainder = money_in - money_out`, excluding opening balances and all legacy posting totals.
+
+Card amounts are bills accounted for in the month, not payments or inferred new consumption. Savings, investments, and personal spending top-ups are money out. Returned spending money and received reimbursements are money in. A refund already netted into a card figure must not also be entered as an incoming amount. The sheet does not track payment confirmation, consumption surplus, or bank balances.
+
+Go validates and sums canonical integer minor units using the configured currency exponent, rejecting invalid amounts or overflow. React displays these totals and preserves user edits through safe idempotent retries. Recurrence carries names forward and keeps amounts blank; usual amounts affect totals only when entered or applied. Historical suggestions reuse item identities and never copy a past amount. Month-specific removals and recurrence changes preserve entered historical data. See the [shared wire contract](../../api/monthly-sheet-contract.md) and [UX requirements](11-simple-monthly-ux.md) for exact behavior.
+
+## Retained legacy model
 
 ## Dates and amounts
 

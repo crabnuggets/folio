@@ -5,6 +5,11 @@ This contract is shared by React and native Android. The Go module lives in
 machine-readable contract; `internal/domain/model.go` defines the implementation
 DTOs. Financial arithmetic lives exclusively in Go.
 
+The default product uses the independent [monthly sheet API](monthly-sheet-contract.md).
+It records section/item amounts without dates, accounts or posting classifications.
+Its totals never include legacy financial postings. The older core below remains
+available for compatibility and retained history; exports contain both models.
+
 ## Wire conventions
 
 Base `/api/v1`. Bearer access tokens authenticate the configured single owner.

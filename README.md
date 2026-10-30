@@ -2,7 +2,9 @@
 
 A personal finance tracker for monthly income, credit card bills, major expenses, and savings or investment allocations. Designed for the browser and Android, with a Go backend.
 
-The Go backend is implemented in [`services/api`](services/api/README.md), with shared [API contracts](api/README.md) and synthetic [fixtures](fixtures). It covers the manual financial core, PostgreSQL persistence, owner authentication and review drafts. The React client in [`apps/web`](apps/web) provides the P2 manual monthly review: account setup, financial entries and corrections, card statements and settlements, planning and month close/reopen, claims, structured draft review, balance observations, and JSON export. Go serves its compiled Vite bundle in the combined image. Native Android follows later; no hosting, bank access, email integration, or paid services have been provisioned.
+The Go backend in [`services/api`](services/api/README.md) persists an owner's monthly sheets in PostgreSQL and computes their totals. The React client in [`apps/web`](apps/web) opens directly into one editable month: money in, money out, named items, section subtotals, and monthly remainder. It supports history suggestions, optional monthly recurrence and usual amounts, notes, correction with Undo, and JSON export. Go serves the compiled Vite bundle in the combined image. Native Android follows later; no hosting, bank access, email integration, or paid services have been provisioned.
+
+The [monthly-sheet contract](api/monthly-sheet-contract.md) and [UX requirements](docs/planning/11-simple-monthly-ux.md) define the current workflow. Older financial endpoints and data remain intact for compatibility and export. They are not automatically converted or included in monthly-sheet totals. [ADR 0006](docs/adr/0006-monthly-sheet.md) records why the new model replaces the earlier account, statement, and payment workflows.
 
 The first hosted version will use **Render Free** for the Go API and React frontend, and **Supabase Free** for PostgreSQL and authentication. Unattended processing will be finalized during Gmail integration. See the [accepted hosting decision](docs/adr/0004-first-hosted-version.md).
 
@@ -18,7 +20,7 @@ npm run dev
 
 Use Node **22.22.2** for the pinned production build (the package also supports local Node 22.13+). In PowerShell, use `npm.cmd` and `npx.cmd`. Vite proxies API requests to `http://localhost:8080`; set `FOLIO_API_PROXY_TARGET` to override that target. Leave `WEB_DIST_DIR` unset so Go stays API-only during Vite development. Sign in with the configured owner bearer token; it stays in tab memory and is cleared on sign-out or expiry.
 
-The overview leads with monthly funding remainder. Recognized spending, surplus, projections, coverage and observed balances are separate server figures; an unknown amount remains unknown. Writes retain their retry identity after uncertain outcomes and require explicit recovery before another action.
+The sheet leads with monthly remainder, calculated from entered incoming and outgoing amounts. Card figures mean monthly bill amounts; paying a bill does not add another outgoing. Blank amounts remain distinct from zero, and recurring amounts are suggestions until applied. The remainder is not a bank balance. Writes retain their retry identity after uncertain outcomes.
 
 From `apps/web`, run `npm run check:api`, `npm run typecheck`, `npm test`, and `npm run build`. Install Chromium with `npx playwright install chromium`, then run `npm run test:e2e`. The [browser suite](apps/web/e2e/README.md) serves the compiled app through an isolated test-only Go server with synthetic data. It requires no hosted account or production database.
 

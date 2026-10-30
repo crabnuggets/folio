@@ -19,17 +19,17 @@ The font family, colour values, dimensions, and motion timings below are **propo
 
 ## Design for the monthly return
 
-On opening, make the selected reporting month, its review status, data freshness, and outstanding review work immediately understandable. Retain the selected month within an active review session. After a long absence, make the month explicit and offer access to the latest month without silently switching an unfinished review.
+The [simple monthly UX](11-simple-monthly-ux.md) and [ADR 0006](../adr/0006-monthly-sheet.md) replace the earlier dashboard and review checklist. Retain the confirmed appearance above while using a single editable monthly sheet.
 
-Lead with the monthly funding remainder, clearly labelled with its coverage. Keep confirmed inflows/outflows and expected commitments nearby. Recognized spending, allocations, monthly surplus, and observed liquid balance remain distinct, following the [product requirements](01-product.md), [accounting rules](02-accounting-and-data.md), and [funding decision](../adr/0003-funding-boundary-and-reimbursements.md). Prominent amounts must not acquire misleading labels such as "Available balance".
+Make the selected month, monthly remainder, money in, money out, and blank-item count immediately understandable. Display section subtotals beside their editable item rows. The remainder includes savings and investment contributions and must not acquire a label such as "Available balance".
 
-Show a concise review checklist and a contextual next action. Missing statements, unconfirmed drafts, unpaid obligations, and unresolved matches must be easy to find. Keep detailed records, evidence, and calculations one deliberate action away. Essential warnings and incomplete coverage stay visible when details are collapsed.
+Amounts are edited in place. Contextual add forms require only name and amount; history suggestions and an optional Repeat monthly switch reduce repeated work. Notes and recurrence changes live in compact item details. Show saving, saved, or failed beside the affected row, keeping edited values available after failure. No statement, payment, claim, plan, or closing checklist belongs in this workflow.
 
 Use one primary heading and one dominant financial figure or task per screen. Prefer a few useful summary groups to a wall of equally prominent cards. Use spacing and quiet dividers for structure; reserve elevated cards for meaningful grouping. Keep qualifiers close to the figures they explain.
 
-Use concise, neutral language: "Needs review", "Statement missing", "Payment recorded", and "Month closed". A negative figure is not automatically overspending. Closing a month is an explicit review assertion, not proof of exhaustive bank coverage.
+Use concise labels such as "Bill amount", "Monthly", "Use usual amounts", and "Still blank". A negative remainder is not automatically overspending. A recorded bill amount does not confirm that a payment happened.
 
-Do not introduce daily streaks, engagement prompts, celebratory spending effects, an obligatory merchant feed, or decorative financial tickers. Due dates still deserve clear treatment during an infrequent review. This guide does not add notification or automation scope.
+Do not introduce daily streaks, engagement prompts, celebratory spending effects, an obligatory merchant feed, or decorative financial tickers. This guide does not add due-date administration, notifications, or automation scope.
 
 ## Colour and surfaces
 

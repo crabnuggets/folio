@@ -1,151 +1,81 @@
-# Folio web
+﻿# Folio web
 
-The P2 manual monthly financial review client. React + TypeScript + Vite, TanStack
-Query for server state, and React Hook Form for accessible labelled forms. The Go
-API owns every financial calculation. Runtime data always comes from the API;
-synthetic records exist only in tests.
+One monthly sheet for incoming and outgoing amounts. React, TypeScript and Vite
+render the sheet; Go computes totals, recurrence, history suggestions and Undo.
+The API contract is [monthly-sheet-contract.md](../../api/monthly-sheet-contract.md).
 
 ## Local development
 
-Use Node **22.13.0** (or a supported newer version satisfying `package.json`) and
-npm. Packages are pinned and `package-lock.json` is checked in. Commands below run
-from `apps/web`. On Windows PowerShell use **`npm.cmd` / `npx.cmd`** to avoid blocked
-PowerShell script shims. On Unix, use `npm` / `npx`.
+Use a Node version supported by package.json. From apps/web on PowerShell:
 
 ```powershell
 npm.cmd ci
 npm.cmd run dev
 ```
 
-Start the Go API separately using [its local instructions](../../services/api/README.md).
-Vite proxies `/api/v1` to **http://localhost:8080**. Override the server-only proxy
-target when necessary:
+Start the Go API using [its instructions](../../services/api/README.md). Vite
+proxies /api/v1 to http://localhost:8080. FOLIO_API_PROXY_TARGET overrides that
+server-side development target. The production build is served by Go.
+
+Sign in with the configured owner bearer token. Tokens stay in tab memory and
+are sent only to the same-origin API, with cookies omitted and redirects rejected.
+No credential belongs in a VITE variable, URL, source file or browser storage.
+Hosted sign-in and token refresh remain separate work.
+
+## Monthly entry
+
+Choose a month, then add an item inside its section with Name and Amount.
+Credit cards use Bill amount. Saved history suggests names without copying prior
+amounts. Repeat monthly is optional and off for new names. Fixed recurring amounts
+can have a usual suggestion; applying suggestions fills only blank rows.
+
+Edit a row's amount directly. Blur or Enter saves; Tab and Enter move between
+amounts. Shift+Tab moves to the previous amount; Tab exits normally at either
+boundary. Escape focuses Discard edit for an unsaved amount, or the item name
+otherwise. Enter on the item name opens and focuses details. Blank differs from
+an explicit zero. Details contain notes, rename, recurrence and usual amounts.
+Skip this month retains history and recurrence; Stop repeating ends future
+automatic rows. Clear and skip offer Undo.
+
+Sheet options add or rename sections. Settings contains currency, export and
+sign-out. Old financial data stays separate and remains in the lossless export.
+The monthly remainder is entered money in minus entered money out, not a bank
+balance or a measure of consumption.
+
+## Saving and recovery
+
+The client serializes monthly writes because one version covers all monthly
+sheets. Each submitted write retains an immutable body, retry key and precondition.
+Saving, saved and failed states appear beside the affected row or form. An
+uncertain write blocks subsequent writes until Retry same action recovers it.
+A stale precondition offers Compare latest, retaining the typed edit for an
+explicit fresh save. The app never silently replaces a stale command's version.
+
+Edits and retry identities survive session interruption in this tab. Sign in with
+the same owner token to continue. Month changes and sign-out wait for unsaved
+edits to be saved or discarded. Closing or reloading the tab loses in-memory edits
+and retry identities; the browser warns while work is unsaved. This is not a
+durable offline write queue. Reconcile saved rows before resubmitting after reload.
+
+## Validation
 
 ```powershell
-$env:FOLIO_API_PROXY_TARGET = 'http://127.0.0.1:18080'
-npm.cmd run dev
-```
-
-Open the Vite URL and sign in with the access token configured for that API's
-owner. The manual bearer sign-in supports the explicit local development token or
-a valid owner JWT. Do not put a bearer token in a `VITE_*` variable, source file,
-URL, localStorage, sessionStorage, or a committed environment file. The application
-stores it only in tab memory, sends it only to same-origin `/api/v1`, omits cookies,
-and rejects redirects. It clears private query data on sign-out/401; JWT expiration
-also clears the session using the untrusted `exp` only as a UI timeout hint. Go
-remains responsible for identity and token verification. Hosted PKCE/refresh-token
-sign-in is P3 work.
-
-The selected review month remains explicit and is retained during the active tab
-session. Navigation uses URL fragments, so browser Back/Forward works between
-destinations without placing financial values or credentials in the URL.
-
-## Review workflow
-
-1. In **Accounts & settings**, choose currency/timezone before financial data,
-   create account aliases and designate the main funding boundary with an effective
-   month. A separate personal spending envelope remains outside that boundary.
-2. In **Plan & review**, add recognized and funding expectations independently.
-   Match actual entries/statements to stable plan lines; expectations never post.
-3. **Add entry** records confirmed income, expenses, allocations, transfers,
-   envelope funding/returns, refunds, reimbursement receipts or settlement cash.
-   Decimal input accepts a decimal point without thousands separators; all
-   conversion uses exact integer strings/BigInt, with signed-64-bit bounds.
-4. **Statements** keeps new spending, amount due, remaining payable, excess credit,
-   evidence and revisions distinct. Choose unknown spending, evidenced net
-   spending, or all four components. No value is inferred from the printed due.
-   **Record payment** records and links confirmed cash, or links an existing payment.
-   This records payments already made; Folio does not initiate bank payments.
-5. Review funding remainder first, then recognized spending/surplus, forecasts,
-   coverage gaps and observed dated balances. Unknown remains unknown, including
-   statement spending, surplus and unavailable forecasts. Snapshot rows do not
-   imply a complete cash balance or reconstruct cash from partial entries.
-6. Complete the checklist and any explicit no-statement reasons to **Close month**.
-   A reason is required to reopen. Closing is a review assertion; unknown costs
-   remain unknown. Entry corrections/voids and statement revisions retain history.
-7. Track **Claims** separately from cash. Record a reimbursement receipt and match
-   it to a claim, optionally classifying an open recovery month against a linked
-   expense or statement. Pending claims are not salary. **Drafts** supports manual
-   structured JSON candidates and explicit evidence/accept/reject review.
-8. **Export JSON** downloads the versioned lossless financial export, including
-   histories. It is sensitive; store it securely. Restore is a later milestone.
-
-## Writes, retries and concurrency
-
-Every action captures one immutable body, UUID idempotency key and (when required)
-`If-Match` version. Repeated submits are single-flight. Neither TanStack Query nor
-the API client automatically retries financial mutations. After a timeout,
-disconnect, invalid success body or server failure, use **Retry same action**.
-The exact original key/body/precondition is retained; the form is locked until the
-outcome is recovered. An unfinished step's uncertain outcome stays uncertain across later rejected
-retries and session expiry; sign in again and recover the original action. Recovery controls are inside the active native dialog, so
-they remain keyboard-accessible while the rest of the page is inert.
-
-Settlement retains each successful payment ID before linking. A failed or stale
-link never starts another payment on retry. Once the payment result is recovered,
-a definitive link rejection permits returning to review and linking that existing
-payment against the current statement. A lost link response still requires recovery. If a confirmed conflict requires
-returning to review, the payment remains in Records; reopen **Record payment** and
-choose **Link an existing recorded payment**. Do not enter another payment.
-
-`412` asks the user to refresh and compare the latest record before a revised
-submission; the client never silently replaces a stale precondition. Validation
-failures offer **Edit form**, retaining values. Submitted values remain inspectable
-in the recovery panel. A closed affected month must be explicitly reopened.
-
-Pending actions are retained **in memory only**, including across session expiry
-and a renewed same-owner sign-in in this tab. Keep the page open during recovery.
-Reloading/closing loses the key; the browser warns while an action is pending.
-After a reload, inspect existing records/export and reconcile before submitting
-again. This is online-first, not a durable offline financial-write queue.
-
-## Build and hosting boundary
-
-```powershell
-npm.cmd run generate:api   # regenerate src/lib/schema.d.ts from api/openapi.yaml
-npm.cmd run check:api      # detect contract/type drift
+npm.cmd run check:api
 npm.cmd run typecheck
 npm.cmd test
 npm.cmd run build
-```
-
-`npm.cmd run build` emits **`apps/web/dist`**. The Go static-hosting integration
-serves this directory at the same origin as `/api/v1`; see the API README for its
-distribution-directory configuration. The bundle has no environment-provided
-credential or external font request. Fonts are locally bundled Inter (OFL licence
-shipped with `@fontsource/inter`). Vite's proxy is for development only. Static
-hosting must preserve API/health routes, asset MIME types, SPA fallback and a CSP
-compatible with same-origin script/style/font assets.
-
-`npm.cmd run preview` previews compiled assets only; it is not the API server.
-Do not use it as a production deployment.
-
-## Checks and known boundaries
-
-Focused tests in `tests/` cover exact money (including values beyond Number's safe
-integer range), pagination, auth/cache/redirect isolation, logout races, version
-conflicts, single-flight writes, lost responses/timeouts, immutable retry identity,
-two-step settlement recovery and modal recovery ancestry. They use synthetic
-fixtures and fake transports, not a fake production dataset. jsdom 26.1.0 is pinned
-to support the repository's Node 22.13.0 runtime.
-
-The separately maintained `e2e/`, `playwright.config.ts`, Go browser test server and
-web workflow exercise the compiled application against real Go calculations:
-
-```powershell
-npx.cmd playwright install chromium
+npm.cmd exec tsc -- --project e2e/tsconfig.json
+npm.cmd exec playwright -- install chromium
 npm.cmd run test:e2e
 ```
 
-Do not run concurrent browser suites against the shared resettable test store.
-See E2E configuration for its loopback ports and synthetic auth. Docker is not
-required for the test-only memory-store harness. Production still uses PostgreSQL.
+The backend owns generated src/lib/schema.d.ts. Unit tests cover exact money,
+API command identity, authentication races and retained form state. Browser tests
+run the built app against the real Go test server, including lost committed
+responses, stale versions, history, recurrence, export, keyboard focus and 320px
+reflow. See [e2e/README.md](e2e/README.md). Do not run concurrent browser suites
+against its one resettable store.
 
-The UI includes keyboard focus styles, native modal focus containment/restoration,
-persistent labels, numeric table headers, 44px targets, mobile navigation/reflow,
-reduced-motion and opaque glass fallbacks. Browser integration, screen-reader and
-visual acceptance require their own checks; unit tests do not establish them.
-The initial version is light only. Recurrence template editing, reconciliation
-period authoring, automatic parsing/imports, Gmail, text/voice capture, hosted
-session refresh and restore remain outside this client slice. Structured draft
-creation is an advanced JSON form, not a document importer or inference feature.
+The first version uses a light theme, locally bundled Inter, solid financial
+surfaces, visible focus and 44px controls. Hosted auth, import/migration, restore,
+Android changes and durable offline writes are outside this frontend change.

@@ -2,12 +2,19 @@ package httpapi
 
 import (
 	"encoding/json"
-	"github.com/crabnuggets/folio/services/api/internal/domain"
 	"reflect"
+	"strings"
+
+	"github.com/crabnuggets/folio/services/api/internal/domain"
 )
 
 // Required-field checks distinguish omitted fields from explicit zero/false.
 var requiredFields = map[string][]string{
+	"MonthlyItemInput":          {"section_id", "name", "amount_minor"},
+	"MonthlyItemUpdate":         {"section_id", "name", "amount_minor", "note", "repeat_monthly", "usual_amount_minor"},
+	"MonthlyUndoInput":          {"undo_token"},
+	"MonthlySectionInput":       {"name", "direction"},
+	"MonthlySectionRename":      {"name"},
 	"SettingsInput":             {"currency", "timezone"},
 	"AccountInput":              {"alias", "kind", "currency", "active"},
 	"EntryInput":                {"kind", "amount_minor", "currency", "effective_date"},
@@ -55,7 +62,8 @@ func validateRequired(body []byte, t reflect.Type) error {
 	}
 	for _, field := range requiredFields[t.Name()] {
 		v, ok := values[field]
-		if !ok || string(v) == "null" {
+		nullableMonthly := (t.Name() == "MonthlyItemInput" || t.Name() == "MonthlyItemUpdate") && (field == "amount_minor" || field == "usual_amount_minor")
+		if !ok || string(v) == "null" && !nullableMonthly {
 			return domain.Fail(400, "MALFORMED_JSON", "Required field is missing or null: "+field)
 		}
 	}
@@ -65,12 +73,15 @@ func validateRequired(body []byte, t reflect.Type) error {
 	}
 	for i := 0; i < t.NumField(); i++ {
 		field := t.Field(i)
-		name := field.Tag.Get("json")
+		name := strings.Split(field.Tag.Get("json"), ",")[0]
 		if name == "" {
 			continue
 		}
 		if b, ok := values[name]; ok {
 			if string(b) == "null" {
+				if t.Name() == "MonthlyItemInput" && name == "repeat_monthly" {
+					return domain.Fail(400, "MALFORMED_JSON", "Field cannot be null: "+name)
+				}
 				if field.Type.Kind() != reflect.Pointer {
 					return domain.Fail(400, "MALFORMED_JSON", "Field cannot be null: "+name)
 				}

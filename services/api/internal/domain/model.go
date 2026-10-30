@@ -346,6 +346,7 @@ type LegacySummary struct {
 	Complete          bool   `json:"complete"`
 }
 type State struct {
+	MonthlySheet          MonthlySheetState               `json:"monthly_sheet"`
 	Settings              Settings                        `json:"settings"`
 	Accounts              map[string]Account              `json:"accounts"`
 	Entries               map[string]Entry                `json:"entries"`
@@ -366,7 +367,7 @@ type State struct {
 
 // NewState initializes empty collections and SGD settings in the Asia/Singapore timezone.
 func NewState() *State {
-	return &State{Settings: Settings{1, "SGD", 2, "Asia/Singapore"}, Accounts: map[string]Account{}, Entries: map[string]Entry{}, Statements: map[string]Statement{}, Settlements: map[string]Settlement{}, ObligationAdjustments: map[string]ObligationAdjustment{}, Snapshots: map[string]Snapshot{}, Claims: map[string]Claim{}, ReceiptMatches: map[string]ReceiptMatch{}, Plans: map[string]Plan{}, Months: map[string]Month{}, Recurrences: map[string]Recurrence{}, Periods: map[string]Period{}, Drafts: map[string]Draft{}, AuditEvents: []Audit{}, LegacySummaries: []LegacySummary{}}
+	return &State{MonthlySheet: newMonthlySheetState(), Settings: Settings{1, "SGD", 2, "Asia/Singapore"}, Accounts: map[string]Account{}, Entries: map[string]Entry{}, Statements: map[string]Statement{}, Settlements: map[string]Settlement{}, ObligationAdjustments: map[string]ObligationAdjustment{}, Snapshots: map[string]Snapshot{}, Claims: map[string]Claim{}, ReceiptMatches: map[string]ReceiptMatch{}, Plans: map[string]Plan{}, Months: map[string]Month{}, Recurrences: map[string]Recurrence{}, Periods: map[string]Period{}, Drafts: map[string]Draft{}, AuditEvents: []Audit{}, LegacySummaries: []LegacySummary{}}
 }
 
 // Audit appends an event with a new identity and the current UTC timestamp.

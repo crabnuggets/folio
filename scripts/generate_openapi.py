@@ -143,6 +143,32 @@ add("GmailSyncRequest", {"from_date": DATE, "to_date": DATE, "max_messages": {"t
 add("CaptureRequest", {"text": {"type": "string", "minLength": 1, "maxLength": 10000}, "captured_at": INSTANT}, description="P7. Resolve relative dates from capture instant and configured timezone; ambiguous fields remain review questions. Never posts received income merely from future-tense text.")
 add("CaptureResponse", {"draft_ids": array(ID), "questions": array(S)}, description="P7. Drafts only; requires the ordinary explicit acceptance boundary.")
 
+# Monthly sheets are independent of legacy posting/accounting records.
+direction = {"type": "string", "enum": ["in", "out"]}
+label = {"type": "string", "enum": ["Amount", "Bill amount"]}
+monthly_fields = {"section_id": ID, "name": {"type": "string", "minLength": 1, "maxLength": 120}, "amount_minor": nullable(AMOUNT), "note": S, "repeat_monthly": BOOL, "usual_amount_minor": nullable(AMOUNT)}
+add("MonthlyItemInput", {**monthly_fields, "item_id": nullable(ID)}, ["section_id", "name", "amount_minor"])
+add("MonthlyItemUpdate", monthly_fields)
+add("MonthlyItem", {"id": ID, **monthly_fields})
+add("MonthlySectionDefinition", {"id": ID, "name": S, "direction": direction, "amount_label": label})
+add("MonthlySection", {**SCHEMAS["MonthlySectionDefinition"]["properties"], "total_minor": AMOUNT, "missing_count": {"type": "integer", "minimum": 0}, "items": array(ref("MonthlyItem"))})
+add("MonthlySheet", {"month": MONTH, "version": VERSION, "currency": CURRENCY, "currency_exponent": {"type": "integer", "minimum": 0, "maximum": 4}, "currency_locked": BOOL, "has_legacy_data": BOOL, "undo_token": nullable(ID), "money_in_minor": AMOUNT, "money_out_minor": AMOUNT, "remainder_minor": AMOUNT, "missing_count": {"type": "integer", "minimum": 0}, "sections": array(ref("MonthlySection"))})
+add("MonthlyItemSuggestion", {"id": ID, "name": S, "section_id": ID, "section_name": S, "direction": direction, "repeat_monthly": BOOL, "usual_amount_minor": nullable(AMOUNT), "current_month_item_id": nullable(ID)})
+add("MonthlyItemSuggestions", {"items": array(ref("MonthlyItemSuggestion"))})
+add("MonthlyUsualInput", {"section_id": nullable(ID)}, [])
+add("MonthlyUndoInput", {"undo_token": ID})
+add("MonthlySectionInput", {"name": {"type": "string", "minLength": 1, "maxLength": 120}, "direction": direction})
+add("MonthlySectionRename", {"name": {"type": "string", "minLength": 1, "maxLength": 120}})
+add("MonthlyPreference", {"month": MONTH, "section_id": ID, "repeat_monthly": BOOL, "usual_amount_minor": nullable(AMOUNT)})
+add("MonthlyItemIdentity", {"id": ID, "name": S, "direction": direction, "aliases": array(S), "preferences": array(ref("MonthlyPreference"))})
+add("MonthlyStoredRow", {"item_id": ID, "section_id": ID, "amount_minor": nullable(AMOUNT), "note": S, "removed": BOOL, "generated": BOOL, "touched": BOOL})
+monthly_data = {"sections": array(ref("MonthlySectionDefinition")), "items": {"type": "object", "additionalProperties": ref("MonthlyItemIdentity")}, "rows": {"type": "object", "additionalProperties": {"type": "object", "additionalProperties": ref("MonthlyStoredRow")}}}
+add("MonthlySheetData", monthly_data)
+add("MonthlyStoredUndo", {"token": ID, "version": VERSION, "before": ref("MonthlySheetData")})
+add("MonthlySheetState", {**monthly_data, "version": VERSION, "currency_locked": BOOL, "undo": nullable(ref("MonthlyStoredUndo"))})
+SCHEMAS["State"]["properties"]["monthly_sheet"] = ref("MonthlySheetState")
+SCHEMAS["State"]["required"].append("monthly_sheet")
+
 for name in ["Account", "Entry", "Statement", "Snapshot", "Claim", "Recurrence", "Period", "Draft", "Audit", "LegacySummary"]:
     add(name + "Page", {"items": array(ref(name)), "next_cursor": nullable(ID)})
 
@@ -187,7 +213,7 @@ def operation(path, method, name, result, request=None, status=200, version=Fals
         parameters += [{"$ref": "#/components/parameters/Limit"}, {"$ref": "#/components/parameters/Cursor"}]
     if month_filter:
         parameters.append({"$ref": "#/components/parameters/MonthFilter"})
-    responses = {str(status): response(ref(result), "Planned successful response (capability deferred)" if deferred else "Success", etag=result in ["Account", "Settings", "Entry", "Statement", "Claim", "Plan", "Month", "Recurrence", "Draft"])}
+    responses = {str(status): response(ref(result), "Planned successful response (capability deferred)" if deferred else "Success", etag=result in ["Account", "Settings", "Entry", "Statement", "Claim", "Plan", "Month", "Recurrence", "Draft", "MonthlySheet"])}
     responses.update({code: response(ref("ErrorEnvelope"), desc) for code, desc in ERROR_STATUSES.items()})
     if deferred:
         responses["501"] = response(ref("ErrorEnvelope"), "FEATURE_NOT_AVAILABLE: integration is explicitly deferred; currently the only capability response after authentication/request validation")
@@ -223,6 +249,18 @@ operation("/drafts/{id}/reject", "post", "rejectDraft", "Draft", "ReasonInput", 
 operation("/legacy-month-summaries", "get", "listLegacyMonthSummaries", "LegacySummaryPage", listing=True)
 operation("/audit-events", "get", "listAuditEvents", "AuditPage", listing=True)
 operation("/exports", "get", "exportFinancialState", "Export")
+operation("/monthly-sheets/{month}", "get", "getMonthlySheet", "MonthlySheet")
+operation("/monthly-sheets/{month}/open", "post", "openMonthlySheet", "MonthlySheet", "EmptyInput")
+operation("/monthly-sheets/{month}/items", "post", "addMonthlyItem", "MonthlySheet", "MonthlyItemInput", version=True)
+operation("/monthly-sheets/{month}/items/{id}", "put", "updateMonthlyItem", "MonthlySheet", "MonthlyItemUpdate", version=True)
+for action in ["remove", "restore"]:
+    operation("/monthly-sheets/{month}/items/{id}/" + action, "post", action + "MonthlyItem", "MonthlySheet", "EmptyInput", version=True)
+operation("/monthly-sheets/{month}/usual-amounts", "post", "useMonthlyUsualAmounts", "MonthlySheet", "MonthlyUsualInput", version=True)
+operation("/monthly-sheets/{month}/undo", "post", "undoMonthlySheet", "MonthlySheet", "MonthlyUndoInput", version=True)
+operation("/monthly-sheets/{month}/sections", "post", "createMonthlySection", "MonthlySheet", "MonthlySectionInput", version=True)
+operation("/monthly-sheets/{month}/sections/{id}", "put", "renameMonthlySection", "MonthlySheet", "MonthlySectionRename", version=True)
+operation("/monthly-item-suggestions", "get", "suggestMonthlyItems", "MonthlyItemSuggestions")
+PATHS["/monthly-item-suggestions"]["get"]["parameters"] = [{"name": "month", "in": "query", "required": True, "schema": MONTH}, {"name": "section_id", "in": "query", "required": True, "schema": ID}, {"name": "q", "in": "query", "schema": S}]
 operation("/imports", "post", "createImport", "ImportJob", "ImportRequest", status=202, deferred=True)
 operation("/imports/{id}", "get", "getImport", "ImportJob", deferred=True)
 operation("/gmail/connect", "post", "connectGmail", "GmailConnectResponse", "GmailConnectRequest", deferred=True)

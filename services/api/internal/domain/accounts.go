@@ -22,6 +22,10 @@ func (s *State) ValidateCurrency(code string) error {
 	return nil
 }
 
+func (s *State) currencyLocked() bool {
+	return s.MonthlySheet.CurrencyLocked || len(s.Accounts) > 0 || len(s.Entries) > 0 || len(s.Statements) > 0 || len(s.Claims) > 0 || len(s.Snapshots) > 0 || len(s.Plans) > 0 || len(s.Recurrences) > 0 || len(s.Periods) > 0 || len(s.LegacySummaries) > 0
+}
+
 // UpdateSettings replaces and audits settings when expected matches their version.
 // It rejects unsupported currencies, invalid timezones, and currency changes after
 // financial setup; version mismatches return STALE_VERSION.
@@ -39,7 +43,7 @@ func (s *State) UpdateSettings(input SettingsInput, expected int64) (Settings, e
 	if _, err := time.LoadLocation(input.Timezone); err != nil {
 		return Settings{}, Invalid("Timezone must be an IANA timezone")
 	}
-	if input.Currency != s.Settings.Currency && (len(s.Accounts) > 0 || len(s.Entries) > 0 || len(s.Statements) > 0 || len(s.Claims) > 0 || len(s.Snapshots) > 0 || len(s.Plans) > 0 || len(s.Recurrences) > 0 || len(s.Periods) > 0 || len(s.LegacySummaries) > 0) {
+	if input.Currency != s.Settings.Currency && s.currencyLocked() {
 		return Settings{}, Fail(409, "CURRENCY_LOCKED", "Currency cannot change after financial setup; an explicit migration is required")
 	}
 	before := s.Settings

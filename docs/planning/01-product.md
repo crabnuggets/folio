@@ -1,5 +1,17 @@
 # Product and experience
 
+## Current product scope
+
+The user approved the simpler direction on 2026-10-29 and requested implementation. The [monthly-sheet UX requirements](11-simple-monthly-ux.md) and [ADR 0006](../adr/0006-monthly-sheet.md) supersede the earlier multi-screen experience below.
+
+Open directly into one month with money in, money out, named items and section subtotals. Enter or change high-level amounts in place. Use history suggestions to reuse names, opt into monthly recurrence when adding or editing an item, and apply usual amounts to blank recurring rows. A card figure is the bill amount for the month. The monthly remainder includes savings and investment contributions and is not a bank balance.
+
+Name and amount are the only required add fields. No account setup, statement dates, payment confirmation, claim matching, plan configuration, or closing checklist is needed. Preserve prior data and export it without silently converting it to monthly amounts. Keep the authenticated single-owner service, exact Go calculations, responsive React client, and free local development path.
+
+## Earlier scope and future reference
+
+The sections below record the initial proposal. They explain retained financial concepts and possible later work; they are not requirements for the default monthly sheet.
+
 ## Goal
 
 Make the monthly check-in a short review of income, card bills, major direct expenses, and savings/investment contributions. Automate collection where feasible and expose exceptions clearly. The user should understand whether the month is on track without classifying every purchase.

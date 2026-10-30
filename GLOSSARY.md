@@ -19,6 +19,12 @@ The amount assigned to an item for a reporting month. For a credit card, this is
 **Monthly remainder**:
 The monthly sheet's entered incoming amounts minus its entered outgoing amounts, including savings and investment contributions. It is not a bank balance or a measure of consumption.
 
+**Monthly recurring item**:
+An item whose name appears in subsequent monthly sheets until the user stops it. Recurrence alone does not establish a monthly amount or confirm receipt or payment.
+
+**Usual amount**:
+An optional amount suggested for a recurring item. It contributes to a monthly sheet only when the user enters or applies it.
+
 ## Financial terms
 
 | Term | Meaning |

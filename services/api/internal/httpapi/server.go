@@ -345,6 +345,7 @@ func lookup[T any](r *http.Request, values map[string]T) (T, error) {
 // routes registers financial reads, mutations, export, and deferred integration
 // endpoints, which respond with 501 FEATURE_NOT_AVAILABLE.
 func (s *server) routes(m *http.ServeMux) {
+	s.monthlyRoutes(m)
 	m.HandleFunc("GET /api/v1/settings", func(w http.ResponseWriter, r *http.Request) {
 		s.read(w, r, func(st *domain.State) (any, int64, error) { return st.Settings, st.Settings.Version, nil })
 	})

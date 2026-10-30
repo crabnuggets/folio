@@ -2,6 +2,8 @@
 
 Status: Proposed recognized-spending baseline, supplemented by ADR 0003 after spreadsheet inspection. Date: 2026-10-26.
 
+The default product scope is superseded by [ADR 0006](0006-monthly-sheet.md). The rules below continue to describe retained legacy financial data, not the new monthly sheet.
+
 ## Decision
 
 Track new credit card cycle spending as one summarized expense, normally assigned to the statement's due month. Track settlement separately as cash movement. Keep total amount due and remaining obligation separate from recognized spending. Income uses receipt month; direct expenses use payment month; allocations use transfer month. Explicit reporting-month overrides are allowed and audited.
