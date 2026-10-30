@@ -21,6 +21,12 @@ The skill files and support files are unmodified upstream copies. Individual wor
 
 Repo-specific tracker, triage-label, and domain conventions live in `docs/agents/`, as directed by the root `AGENTS.md`.
 
+## Repository skills
+
+The following skills are maintained locally, outside the upstream collection:
+
+- [polish](polish/SKILL.md) runs delegated review, validation, and fixes after implementation for the user's requested number of rounds, defaulting to three. Requests to polish an implementation or run iterative review-and-fix passes trigger it automatically. Round 1 covers the full implementation; subsequent rounds cover only additional changes.
+
 ## Updating
 
 Choose an upstream revision, then use Codex's `skill-installer` helper with `--repo mattpocock/skills --ref <revision> --dest <staging-directory> --path <upstream-skill-paths>`. Install every directory under upstream `skills/` that contains a `SKILL.md`; copy each complete skill folder here by its basename. Preserve supporting files and the upstream license, and update this revision and inventory. Review changes before replacing the checked-in copies.

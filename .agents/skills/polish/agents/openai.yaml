@@ -1,0 +1,6 @@
+interface:
+  display_name: "Polish"
+  short_description: "Delegated review and fixes, defaulting to three rounds"
+  default_prompt: "Use $polish to review the completed implementation with delegates, validate their findings, and fix valid issues for the requested number of rounds, defaulting to three."
+policy:
+  allow_implicit_invocation: true
