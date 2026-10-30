@@ -8,9 +8,14 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   backend:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     services:
       postgres:
         image: postgres:17.6
@@ -46,7 +51,23 @@ jobs:
         run: go vet ./...
       - name: Unit, HTTP contract and PostgreSQL integration tests
         working-directory: services/api
-        run: go test -race -count=1 ./...
+        shell: bash
+        run: |
+          mkdir -p test-results
+          go test -v -race -count=1 -coverprofile=test-results/coverage.out ./... | tee test-results/go-test.log
+      - name: Coverage report
+        working-directory: services/api
+        run: |
+          go tool cover -func=test-results/coverage.out > test-results/coverage.txt
+          go tool cover -html=test-results/coverage.out -o test-results/coverage.html
+          echo "Go coverage: $(tail -n 1 test-results/coverage.txt)" >> "$GITHUB_STEP_SUMMARY"
       - name: Build
         working-directory: services/api
         run: go build ./cmd/folio
+      - name: Upload backend test results and coverage
+        uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: backend-test-results
+          path: services/api/test-results/
+          retention-days: 7
