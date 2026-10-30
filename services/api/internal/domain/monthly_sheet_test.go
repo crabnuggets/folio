@@ -70,9 +70,7 @@ func TestMonthlySheetReportsCurrencyLockAcrossMonths(t *testing.T) {
 				t.Fatalf("currency_locked missing or incorrect in later month: %s", encoded)
 			}
 			_, err = s.UpdateSettings(SettingsInput{"JPY", "UTC"}, s.Settings.Version)
-			if (err != nil) != setup.locked {
-				t.Fatalf("lock differs from settings immutability: %v", err)
-			}
+			aeErrorCode(t, err, "VALIDATION_FAILED")
 		})
 	}
 }
@@ -245,13 +243,19 @@ func TestMonthlyUndoSerializationAndSections(t *testing.T) {
 	}
 	restored, err := restarted.UndoMonthlySheet("2026-01", MonthlyUndoInput{*cleared.UndoToken}, cleared.Version)
 	monthlyCheck(t, err)
-	if restored.MoneyOutMinor != 500 || restored.UndoToken != nil || restored.Version <= cleared.Version {
+	if restored.MoneyOutMinor != 500 || restored.UndoToken == nil || restored.Version <= cleared.Version {
 		t.Fatal("undo did not restore amount safely")
 	}
 	_, err = restarted.UndoMonthlySheet("2026-01", MonthlyUndoInput{*cleared.UndoToken}, restored.Version)
 	if err == nil {
 		t.Fatal("stale undo accepted")
 	}
+	redone, err := restarted.UndoMonthlySheet("2026-01", MonthlyUndoInput{*restored.UndoToken}, restored.Version)
+	monthlyCheck(t, err)
+	if redone.MoneyOutMinor != 0 || redone.UndoToken == nil {
+		t.Fatal("redo did not restore cleared amount")
+	}
+
 	renamed, err := restarted.RenameMonthlySection("2026-01", monthlyCards, MonthlySectionRename{"Cards renamed"}, restarted.MonthlySheet.Version)
 	monthlyCheck(t, err)
 	if renamed.Sections[3].AmountLabel != "Bill amount" {

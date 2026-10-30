@@ -1,4 +1,4 @@
-import { test, expect, bearer, signIn, noHorizontalOverflow } from './fixtures';
+import { test, expect, bearer, signIn, selectMonth, noHorizontalOverflow } from './fixtures';
 
 test('compiled app boots under Go CSP and preserves API/health routing', async ({ page, request }) => {
   const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
@@ -14,7 +14,8 @@ test('invalid bearer is recoverable; sign out clears financial UI and token pers
   await token.fill('invalid-synthetic-bearer-only'); await token.press('Enter'); await expect(page.getByRole('alert')).toContainText('valid bearer access token');
   await token.fill(bearer); await token.press('Enter'); await expect(page.getByRole('region', { name: 'Monthly summary' })).toBeVisible();
   expect(await page.evaluate(() => JSON.stringify({ local: { ...localStorage }, session: { ...sessionStorage } }))).not.toContain(bearer);
-  await page.getByRole('button', { name: 'Settings', exact: true }).click(); await page.getByRole('button', { name: 'Sign out', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Settings', exact: true })).toHaveCount(0);
+  await page.getByRole('banner').getByRole('button', { name: 'Sign out', exact: true }).click();
   await expect(page.getByLabel('Access token', { exact: false })).toHaveValue(''); await expect(page.getByRole('region', { name: 'Monthly summary' })).toHaveCount(0);
   await page.reload(); await expect(page.getByLabel('Access token', { exact: false })).toBeVisible();
 });
@@ -24,7 +25,7 @@ test('offline and failed read states preserve the sheet and recover without inve
   await expect(page.getByRole('button', { name: 'Add item to Income', exact: true })).toBeDisabled(); await context.setOffline(false);
   await expect(page.getByRole('button', { name: 'Add item to Income', exact: true })).toBeEnabled();
   await page.route('**/api/v1/monthly-sheets/2026-11/open', route => route.abort('connectionfailed'));
-  await page.getByLabel('Month', { exact: true }).fill('2026-11'); await expect(page.getByRole('button', { name: 'Retry loading' })).toBeVisible();
+  await selectMonth(page, '2026-11'); await expect(page.getByRole('button', { name: 'Retry loading' })).toBeVisible();
   await page.unroute('**/api/v1/monthly-sheets/2026-11/open'); await page.getByRole('button', { name: 'Retry loading' }).click();
   await expect(page.getByRole('region', { name: 'Income', exact: true })).toBeVisible();
 });

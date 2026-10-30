@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { test, expect, bearer, month, sectionIds, signIn } from './fixtures';
+import { test, expect, bearer, month, sectionIds, signIn, selectMonth } from './fixtures';
 
 for (const keyboard of [false, true]) test(`discard amount without a mutation using ${keyboard ? 'keyboard' : 'pointer'}`, async ({ page, backend }) => {
   await backend.add('Salary', '10000'); await signIn(page);
@@ -84,16 +84,19 @@ for (const changed of ['removed', 'relocated'] as const) test(`compare retains $
   expect(saved.sections.flatMap(section => section.items).find(item => item.name === 'Other')).toMatchObject({ note: 'Other unsaved draft' });
 });
 
-test('first amount has visible currency guidance and empty later months stay locked', async ({ page, backend }) => {
+test('SGD is fixed before amounts and in empty later months with separate month and year controls', async ({ page, backend }) => {
   await signIn(page);
-  const change = page.getByRole('button', { name: 'Change currency', exact: true }); await expect(change).toBeVisible();
-  await expect(page.getByText('Currency: SGD. Check this before saving your first amount.', { exact: false })).toBeVisible();
-  await change.click(); await page.getByLabel(/^Currency/).fill('JPY'); await page.getByRole('button', { name: 'Save currency' }).click();
-  await expect(page.getByText('Currency saved.', { exact: true })).toBeVisible();
+  const change = page.getByRole('button', { name: 'Change currency', exact: true }); await expect(change).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Settings', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('region', { name: 'Monthly summary' })).toContainText('SGD 0.00');
+  const monthSelect = page.getByRole('button', { name: 'Month', exact: true });
+  await expect(monthSelect).toContainText('October'); await monthSelect.click(); await expect(page.getByRole('group', { name: 'Choose month' }).getByRole('button')).toHaveCount(12); await monthSelect.press('Escape');
+  const year = page.getByRole('spinbutton', { name: 'Year', exact: true }); await expect(year).toHaveValue('2026');
+  await year.fill('1899'); await year.press('Enter'); await expect(year).toHaveValue('2026');
   await backend.add('Salary', '0'); await page.reload(); await signIn(page);
-  await expect(change).toHaveCount(0); await page.getByLabel('Month', { exact: true }).fill('2026-11');
+  await selectMonth(page, '2027-01'); await expect(monthSelect).toContainText('January'); await expect(year).toHaveValue('2027');
   await expect(page.getByRole('region', { name: 'Income', exact: true })).toBeVisible(); await expect(change).toHaveCount(0);
-  await page.getByRole('button', { name: 'Settings', exact: true }).click(); await expect(page.getByLabel(/^Currency/)).toBeDisabled();
+  const later = await backend.get<'MonthlySheet'>('/monthly-sheets/2027-01'); expect(later.currency).toBe('SGD'); expect(later.currency_locked).toBe(true); expect(later.sections.flatMap(section => section.items)).toHaveLength(0);
 });
 
 for (const changed of ['removed', 'relocated'] as const) for (const action of ['discard', 'reapply'] as const) test(`compare retains ${changed} row and other drafts for explicit ${action}`, async ({ page, context, backend }) => {
@@ -114,7 +117,7 @@ for (const changed of ['removed', 'relocated'] as const) for (const action of ['
   const saved = await backend.get<'MonthlySheet'>(`/monthly-sheets/${month}`); const savedItem = saved.sections.flatMap(section => section.items).find(row => row.id === id);
   if (changed === 'removed' && action === 'discard') expect(savedItem).toBeUndefined();
   else expect(savedItem).toMatchObject({ amount_minor: action === 'reapply' ? '11100' : '10000', note: 'Concurrent note', section_id: changed === 'relocated' ? sectionIds.otherIn : item.section_id });
-  await page.getByLabel('Month', { exact: true }).fill('2026-11'); await expect(page.getByRole('region', { name: 'Income', exact: true })).toBeVisible();
+  await selectMonth(page, '2026-11'); await expect(page.getByRole('region', { name: 'Income', exact: true })).toBeVisible();
   await other.close();
 });
 
@@ -136,48 +139,38 @@ test('noncommitted 503 then exact retry 412 releases uncertainty for comparison'
   expect(attempts[2].key).not.toBe(attempts[0].key);
 });
 
-test('currency exact retry 412 permits editing after noncommitted 503', async ({ page, backend }) => {
-  await signIn(page); await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  const attempts: { key: string; body: string | null; version: string }[] = [];
-  await page.route('**/api/v1/settings', async route => {
-    const request = route.request(); if (request.method() !== 'PATCH') return route.continue();
-    attempts.push({ key: request.headers()['idempotency-key'], body: request.postData(), version: request.headers()['if-match'] });
-    if (attempts.length === 1) return route.fulfill({ status: 503, json: { error: { code: 'UNAVAILABLE', message: 'Synthetic noncommit' } } });
-    await route.continue();
-  });
-  await page.getByLabel(/^Currency/).fill('JPY'); await page.getByRole('button', { name: 'Save currency' }).click();
-  await expect(page.getByRole('button', { name: 'Retry same currency action' })).toBeVisible(); await expect(page.getByRole('button', { name: 'Edit currency', exact: true })).toHaveCount(0);
+test('stale timezone settings require a fresh version and command before an explicit update', async ({ backend }) => {
   const settings = await backend.get<'Settings'>('/settings');
-  const response = await backend.request.patch('/api/v1/settings', { headers: { 'Idempotency-Key': randomUUID(), 'If-Match': `"${settings.version}"` }, data: { currency: 'USD', timezone: settings.timezone } }); expect(response.status()).toBe(200);
-  await page.getByRole('button', { name: 'Retry same currency action' }).click(); await expect(page.getByRole('button', { name: 'Edit currency', exact: true })).toBeVisible(); expect(attempts[1]).toEqual(attempts[0]);
-  await page.getByRole('button', { name: 'Edit currency', exact: true }).click(); await expect(page.getByLabel(/^Currency/)).toBeEnabled(); await expect(page.getByLabel(/^Currency/)).toHaveValue('JPY'); await page.getByRole('button', { name: 'Save currency' }).click();
-  await expect(page.getByText('Currency saved.', { exact: true })).toBeVisible(); expect(attempts[2].key).not.toBe(attempts[0].key); expect((await backend.get<'Settings'>('/settings')).currency).toBe('JPY');
+  const response = await backend.request.patch('/api/v1/settings', { headers: { 'Idempotency-Key': randomUUID(), 'If-Match': `"${settings.version}"` }, data: { currency: 'SGD', timezone: 'UTC' } }); expect(response.status()).toBe(200);
+  const stale = { headers: { 'Idempotency-Key': randomUUID(), 'If-Match': `"${settings.version}"` }, data: { currency: 'SGD', timezone: 'Asia/Singapore' } };
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const rejected = await backend.request.patch('/api/v1/settings', stale); expect(rejected.status()).toBe(412); expect((await rejected.json()).error.code).toBe('STALE_VERSION');
+  }
+  const latest = await backend.get<'Settings'>('/settings'); expect(latest.timezone).toBe('UTC');
+  const corrected = await backend.request.patch('/api/v1/settings', { ...stale, headers: { 'Idempotency-Key': randomUUID(), 'If-Match': `"${latest.version}"` } }); expect(corrected.status()).toBe(200);
+  expect(await backend.get<'Settings'>('/settings')).toMatchObject({ currency: 'SGD', timezone: 'Asia/Singapore', version: latest.version + 1 });
 });
 
-test('currency validation failure retains input and permits an explicit correction', async ({ page, backend }) => {
-  await signIn(page); await page.getByRole('button', { name: 'Change currency', exact: true }).click();
-  await page.getByLabel(/^Currency/).fill('XYZ'); await page.getByRole('button', { name: 'Save currency' }).click();
-  await expect(page.getByRole('button', { name: 'Edit currency', exact: true })).toBeVisible(); await expect(page.getByLabel(/^Currency/)).toHaveValue('XYZ');
-  expect((await backend.get<'Settings'>('/settings')).currency).toBe('SGD');
-  await page.getByRole('button', { name: 'Edit currency', exact: true }).click(); await expect(page.getByLabel(/^Currency/)).toBeEnabled();
-  await page.getByLabel(/^Currency/).fill('JPY'); await page.getByRole('button', { name: 'Save currency' }).click();
-  await expect(page.getByText('Currency saved.', { exact: true })).toBeVisible(); expect((await backend.get<'Settings'>('/settings')).currency).toBe('JPY');
+test('non-SGD settings fail validation before and after amounts while SGD timezone updates succeed', async ({ backend }) => {
+  const settings = await backend.get<'Settings'>('/settings');
+  for (const hasAmount of [false, true]) {
+    if (hasAmount) await backend.add('Salary', '0');
+    for (const currency of ['USD', 'JPY', 'KWD', 'XYZ']) {
+      const response = await backend.request.patch('/api/v1/settings', { headers: { 'Idempotency-Key': randomUUID(), 'If-Match': `"${settings.version}"` }, data: { currency, timezone: 'UTC' } });
+      expect(response.status()).toBe(422); expect((await response.json()).error.code).toBe('VALIDATION_FAILED');
+      expect(await backend.get<'Settings'>('/settings')).toEqual(settings);
+    }
+  }
+  const corrected = await backend.request.patch('/api/v1/settings', { headers: { 'Idempotency-Key': randomUUID(), 'If-Match': `"${settings.version}"` }, data: { currency: 'SGD', timezone: 'UTC' } }); expect(corrected.status()).toBe(200);
+  expect(await backend.get<'Settings'>('/settings')).toMatchObject({ currency: 'SGD', timezone: 'UTC', version: settings.version + 1 });
 });
 
-test('lost committed currency command stays immutable across 401 and renewed sign-in', async ({ page, backend }) => {
-  await signIn(page); await page.getByRole('button', { name: 'Change currency', exact: true }).click();
-  const attempts: { key: string; body: string | null; version: string }[] = []; const statuses: number[] = [];
-  await page.route('**/api/v1/settings', async route => {
-    const request = route.request(); if (request.method() !== 'PATCH') return route.continue();
-    attempts.push({ key: request.headers()['idempotency-key'], body: request.postData(), version: request.headers()['if-match'] });
-    const response = await route.fetch(attempts.length === 2 ? { headers: { ...request.headers(), authorization: 'Bearer expired-synthetic-token-only' } } : {});
-    statuses.push(response.status()); if (attempts.length === 1) await route.abort('connectionfailed'); else await route.fulfill({ response });
-  });
-  await page.getByLabel(/^Currency/).fill('JPY'); await page.getByRole('button', { name: 'Save currency' }).click();
-  const retry = page.getByRole('button', { name: 'Retry same currency action' }); await expect(retry).toBeVisible();
-  expect((await backend.get<'Settings'>('/settings')).currency).toBe('JPY'); await retry.click();
-  await page.getByLabel('Access token', { exact: false }).fill(bearer); await page.getByRole('button', { name: 'Sign in', exact: true }).click();
-  await expect(retry).toBeVisible(); await expect(page.getByLabel(/^Currency/)).toHaveValue('JPY'); await expect(page.getByRole('button', { name: 'Edit currency', exact: true })).toHaveCount(0);
-  await retry.click(); await expect(page.getByText('Currency saved.', { exact: true })).toBeVisible();
-  expect(statuses).toEqual([200, 401, 200]); expect(attempts).toHaveLength(3); expect(attempts[1]).toEqual(attempts[0]); expect(attempts[2]).toEqual(attempts[0]);
+test('committed timezone settings replay exactly after an expired bearer without duplicate audit', async ({ backend }) => {
+  const settings = await backend.get<'Settings'>('/settings');
+  const command = { headers: { 'Idempotency-Key': randomUUID(), 'If-Match': `"${settings.version}"` }, data: { currency: 'SGD', timezone: 'UTC' } };
+  const committed = await backend.request.patch('/api/v1/settings', command); expect(committed.status()).toBe(200);
+  const expired = await backend.request.patch('/api/v1/settings', { ...command, headers: { ...command.headers, Authorization: 'Bearer expired-synthetic-token-only' } }); expect(expired.status()).toBe(401);
+  const replay = await backend.request.patch('/api/v1/settings', command); expect(replay.status()).toBe(200); expect(replay.headers()['idempotency-replayed']).toBe('true'); expect(await replay.json()).toEqual(await committed.json());
+  expect(await backend.get<'Settings'>('/settings')).toMatchObject({ currency: 'SGD', timezone: 'UTC', version: settings.version + 1 });
+  const exported = await backend.get<'Export'>('/exports'); expect(exported.state.audit_events.filter(event => event.action === 'settings.updated')).toHaveLength(1);
 });

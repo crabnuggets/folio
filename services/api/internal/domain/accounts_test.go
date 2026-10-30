@@ -26,26 +26,26 @@ func aeErrorCode(t *testing.T, err error, code string) {
 	}
 }
 func TestAccountSettingsCurrencyAndTimezone(t *testing.T) {
-	for _, tc := range []struct {
-		code     string
-		exponent int
-	}{{"SGD", 2}, {"JPY", 0}, {"KWD", 3}} {
+	for _, timezone := range []string{"Asia/Singapore", "UTC"} {
 		s := NewState()
-		got, err := s.UpdateSettings(SettingsInput{Currency: tc.code, Timezone: "Asia/Singapore"}, 1)
-		if err != nil || got.CurrencyExponent != tc.exponent {
-			t.Fatalf("%s: got %+v, %v", tc.code, got, err)
+		got, err := s.UpdateSettings(SettingsInput{Currency: "SGD", Timezone: timezone}, 1)
+		if err != nil || got.Currency != "SGD" || got.CurrencyExponent != 2 || got.Timezone != timezone || got.Version != 2 {
+			t.Fatalf("%s: got %+v, %v", timezone, got, err)
 		}
-		_, err = s.UpdateSettings(SettingsInput{Currency: tc.code, Timezone: "UTC"}, 1)
+		_, err = s.UpdateSettings(SettingsInput{Currency: "SGD", Timezone: "UTC"}, 1)
 		aeErrorCode(t, err, "STALE_VERSION")
 	}
 	s := NewState()
-	for _, input := range []SettingsInput{{"ZZZ", "UTC"}, {"SGD", "Local"}, {"SGD", "Mars/City"}, {"SGD", ""}} {
+	for _, input := range []SettingsInput{{"USD", "UTC"}, {"JPY", "UTC"}, {"KWD", "UTC"}, {"ZZZ", "UTC"}, {"SGD", "Local"}, {"SGD", "Mars/City"}, {"SGD", ""}} {
 		_, err := s.UpdateSettings(input, 1)
 		aeErrorCode(t, err, "VALIDATION_FAILED")
+		if s.Settings != NewState().Settings || len(s.AuditEvents) != 0 {
+			t.Fatal("invalid settings command changed settings or audit history")
+		}
 	}
 	aeAccount(t, s, "bank", true)
 	_, err := s.UpdateSettings(SettingsInput{Currency: "JPY", Timezone: "UTC"}, 1)
-	aeErrorCode(t, err, "CURRENCY_LOCKED")
+	aeErrorCode(t, err, "VALIDATION_FAILED")
 	if s.Settings.Currency != "SGD" || s.Settings.Version != 1 {
 		t.Fatal("failed settings command mutated state")
 	}
@@ -122,7 +122,7 @@ func TestSnapshotObservationsRetainTimestampsAndMonthProtection(t *testing.T) {
 func TestSettingsAuditPreservesBeforeAndAfter(t *testing.T) {
 	s := NewState()
 	original := s.Settings
-	updated, err := s.UpdateSettings(SettingsInput{Currency: "JPY", Timezone: "UTC"}, original.Version)
+	updated, err := s.UpdateSettings(SettingsInput{Currency: "SGD", Timezone: "UTC"}, original.Version)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -143,7 +143,7 @@ func TestSettingsAuditPreservesBeforeAndAfter(t *testing.T) {
 	if before != original || after != updated {
 		t.Fatalf("settings audit lost values: before %+v after %+v", before, after)
 	}
-	if _, err := s.UpdateSettings(SettingsInput{Currency: "KWD", Timezone: "Asia/Singapore"}, updated.Version); err != nil {
+	if _, err := s.UpdateSettings(SettingsInput{Currency: "SGD", Timezone: "Asia/Singapore"}, updated.Version); err != nil {
 		t.Fatal(err)
 	}
 	if err := json.Unmarshal(s.AuditEvents[0].After, &after); err != nil {
@@ -154,6 +154,8 @@ func TestSettingsAuditPreservesBeforeAndAfter(t *testing.T) {
 	}
 	_, err = s.UpdateSettings(SettingsInput{Currency: "USD", Timezone: "UTC"}, original.Version)
 	aeErrorCode(t, err, "STALE_VERSION")
+	_, err = s.UpdateSettings(SettingsInput{Currency: "USD", Timezone: "UTC"}, s.Settings.Version)
+	aeErrorCode(t, err, "VALIDATION_FAILED")
 	if len(s.AuditEvents) != 2 {
 		t.Fatal("failed settings command produced audit history")
 	}

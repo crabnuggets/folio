@@ -1,4 +1,4 @@
-import { test, expect, signIn, addItem, month, sectionIds, noHorizontalOverflow } from './fixtures';
+import { test, expect, signIn, selectMonth, addItem, month, sectionIds, noHorizontalOverflow } from './fixtures';
 
 test('one monthly sheet accounts for a complete synthetic month and exports server state', async ({ page, backend }, testInfo) => {
   await signIn(page);
@@ -18,9 +18,9 @@ test('one monthly sheet accounts for a complete synthetic month and exports serv
   await noHorizontalOverflow(page);
   await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({ path: testInfo.outputPath('monthly-sheet.png'), fullPage: true });
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Settings', exact: true })).toHaveCount(0);
   const downloadPromise = page.waitForEvent('download');
-  await page.getByRole('button', { name: 'Export JSON', exact: true }).click();
+  await page.getByRole('banner').getByRole('button', { name: 'Export JSON', exact: true }).click();
   const download = await downloadPromise; expect(download.suggestedFilename()).toMatch(/^folio-export-.*\.json$/);
   const exported = await backend.get<'Export'>('/exports'); expect(exported.schema_version).toBe(1);
   expect(Object.keys(exported.state.monthly_sheet.rows[month])).toHaveLength(8);
@@ -30,7 +30,7 @@ test('recurring names start blank, usual amounts respect edits and zero, skip di
   await backend.add('House savings', '90000', sectionIds.recurring, { repeat_monthly: true, usual_amount_minor: '90000' });
   await backend.add('Everyday card', '73245', sectionIds.cards, { repeat_monthly: true });
   await backend.add('Zero allowance', '1000', sectionIds.recurring, { repeat_monthly: true, usual_amount_minor: '1000' });
-  await signIn(page); await page.getByLabel('Month', { exact: true }).fill('2026-11');
+  await signIn(page); await selectMonth(page, '2026-11');
   const savings = page.getByLabel('Amount for House savings', { exact: true });
   const zero = page.getByLabel('Amount for Zero allowance', { exact: true });
   const card = page.getByLabel('Bill amount for Everyday card', { exact: true });
@@ -44,14 +44,14 @@ test('recurring names start blank, usual amounts respect edits and zero, skip di
   await page.getByRole('button', { name: 'Everyday card Monthly', exact: true }).click();
   await page.getByRole('button', { name: 'Skip this month', exact: true }).click();
   await expect(card).toHaveCount(0);
-  await page.getByRole('button', { name: 'Undo last change' }).click(); await expect(card).toBeVisible();
+  await page.getByRole('button', { name: 'Undo', exact: true }).click(); await expect(card).toBeVisible();
   await page.getByRole('button', { name: 'Everyday card Monthly', exact: true }).click();
   await page.getByRole('button', { name: 'Skip this month', exact: true }).click();
-  await page.getByLabel('Month', { exact: true }).fill('2026-12'); await expect(card).toHaveValue('');
+  await selectMonth(page, '2026-12'); await expect(card).toHaveValue('');
   await page.getByRole('button', { name: 'House savings Monthly', exact: true }).click();
   await page.getByRole('button', { name: 'Stop repeating', exact: true }).click();
   await expect(page.getByLabel('Month', { exact: true })).toBeEnabled();
-  await page.getByLabel('Month', { exact: true }).fill('2027-01'); await expect(savings).toHaveCount(0); await expect(card).toBeVisible();
+  await selectMonth(page, '2027-01'); await expect(savings).toHaveCount(0); await expect(card).toBeVisible();
   const october = await backend.get<'MonthlySheet'>(`/monthly-sheets/${month}`);
   expect(october.sections.flatMap(section => section.items).find(item => item.name === 'House savings')?.amount_minor).toBe('90000');
 });

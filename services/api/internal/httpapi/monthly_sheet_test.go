@@ -38,6 +38,8 @@ func firstMonthlyItem(t *testing.T, sheet domain.MonthlySheet) domain.MonthlyIte
 
 func TestMonthlyHTTPContractLifecycleAndRetry(t *testing.T) {
 	h := newHarness(t)
+	initialSettings := h.request(t, http.MethodGet, "/api/v1/settings", nil, "", "")
+	assertError(t, h.request(t, http.MethodPatch, "/api/v1/settings", domain.SettingsInput{Currency: "USD", Timezone: "Asia/Singapore"}, domain.NewID(), initialSettings.headers.Get("ETag")), 422, "VALIDATION_FAILED")
 	opened := h.request(t, http.MethodPost, monthlyPath+"/open", map[string]any{}, domain.NewID(), "")
 	sheet := sheetResponse(t, opened)
 	if len(sheet.Sections) != 5 || sheet.MissingCount != 0 {
@@ -82,7 +84,7 @@ func TestMonthlyHTTPContractLifecycleAndRetry(t *testing.T) {
 	}
 	undone := h.request(t, http.MethodPost, monthlyPath+"/undo", domain.MonthlyUndoInput{UndoToken: *sheet.UndoToken}, domain.NewID(), cleared.headers.Get("ETag"))
 	sheet = sheetResponse(t, undone)
-	if sheet.MoneyOutMinor != amount || sheet.UndoToken != nil {
+	if sheet.MoneyOutMinor != amount || sheet.UndoToken == nil {
 		t.Fatal("undo did not restore original amount")
 	}
 	removed := h.request(t, http.MethodPost, monthlyPath+"/items/"+item.ID+"/remove", map[string]any{}, domain.NewID(), undone.headers.Get("ETag"))
@@ -110,7 +112,7 @@ func TestMonthlyHTTPContractLifecycleAndRetry(t *testing.T) {
 		t.Fatal("opening month rewrote old amount")
 	}
 	settings := h.request(t, http.MethodGet, "/api/v1/settings", nil, "", "")
-	assertError(t, h.request(t, http.MethodPatch, "/api/v1/settings", domain.SettingsInput{Currency: "USD", Timezone: "Asia/Singapore"}, domain.NewID(), settings.headers.Get("ETag")), 409, "CURRENCY_LOCKED")
+	assertError(t, h.request(t, http.MethodPatch, "/api/v1/settings", domain.SettingsInput{Currency: "USD", Timezone: "Asia/Singapore"}, domain.NewID(), settings.headers.Get("ETag")), 422, "VALIDATION_FAILED")
 	export := h.request(t, http.MethodGet, "/api/v1/exports", nil, "", "")
 	exported := expect(t, export, 200, "Export")
 	state := exported["state"].(map[string]any)
