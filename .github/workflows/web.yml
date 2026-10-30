@@ -8,9 +8,47 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  web:
+  frontend:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - run: npm ci
+      - name: Generated OpenAPI types match the contract
+        run: npm run check:api
+      - name: Type check
+        run: npm run typecheck
+      - name: Type check browser tests
+        run: npx tsc --noEmit -p e2e/tsconfig.json
+      - name: Unit and component tests
+        run: npm test -- --reporter=default --reporter=github-actions --reporter=junit --outputFile=test-results/vitest.xml
+      - name: Production build
+        run: npm run build
+      - name: Upload frontend test results
+        uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: frontend-test-results
+          path: apps/web/test-results/vitest.xml
+          retention-days: 7
+
+  browser:
+    needs: frontend
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: apps/web
@@ -26,28 +64,37 @@ jobs:
           go-version: '1.26.10'
           cache-dependency-path: services/api/go.sum
       - run: npm ci
-      - name: Generated OpenAPI types match the contract
-        run: npm run check:api
-      - name: Type check
-        run: npm run typecheck
-      - name: Type check browser tests
-        run: npx tsc --noEmit -p e2e/tsconfig.json
-      - name: Focused client tests
-        run: npm test
-      - name: Production build
-        run: npm run build
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
       - name: Real Go backend browser acceptance tests
         run: npm run test:e2e
-      - name: Build combined production image
-        working-directory: .
-        run: docker build -f services/api/Dockerfile -t folio:ci .
-      - uses: actions/upload-artifact@v4
-        if: failure()
+      - name: Upload browser test report and failure artifacts
+        uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
         with:
-          name: browser-failure-artifacts
+          name: browser-test-results
           path: |
             apps/web/playwright-report/
             apps/web/test-results/
           retention-days: 7
+
+  image:
+    needs: frontend
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build combined production image
+        run: docker build -f services/api/Dockerfile -t folio:ci .
+
+  web:
+    if: ${{ always() }}
+    needs: [frontend, browser, image]
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    steps:
+      - name: Require all web checks to pass
+        run: |
+          test "${{ needs.frontend.result }}" = success
+          test "${{ needs.browser.result }}" = success
+          test "${{ needs.image.result }}" = success
