@@ -99,7 +99,7 @@ export function TransactionChat({ api, signedIn, month, sheet, available, saving
       if (!active.current) return;
       setMessage(result.message);
       setProposals(result.items.map(item => ({ key: `chat-${crypto.randomUUID()}`, name: item.name, section_id: item.section_id, amount: moneyInput(item.amount_minor, sheet.currency_exponent), note: item.note })));
-      setText(''); setAttachment(undefined);
+      if (result.items.length > 0) { setText(''); setAttachment(undefined); }
     } catch (error) { if (active.current) setError(`No items were added. ${errorMessage(error)}`); }
     finally { setProcessing(false); }
   };

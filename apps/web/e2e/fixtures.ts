@@ -21,8 +21,8 @@ export class Backend {
     return this.post<'MonthlySheet'>(`/monthly-sheets/${selectedMonth}/items`, { name, amount_minor: amount, section_id: section, ...prefs }, { version: sheet.version });
   }
 }
-export const test = base.extend<{ backend: Backend }>({ backend: [async ({ playwright }, use) => {
-  const request = await playwright.request.newContext({ baseURL: 'http://127.0.0.1:18080', extraHTTPHeaders: { Authorization: `Bearer ${bearer}` } });
+export const test = base.extend<{ backend: Backend }>({ backend: [async ({ playwright, baseURL }, use) => {
+  const request = await playwright.request.newContext({ baseURL, extraHTTPHeaders: { Authorization: `Bearer ${bearer}` } });
   const reset = await request.post('/__e2e/reset'); expect(reset.status()).toBe(204);
   await use(new Backend(request)); await request.dispose();
 }, { auto: true }] });
@@ -30,17 +30,28 @@ export { expect };
 export async function signIn(page: Page) {
   await page.goto('/'); await page.getByLabel('Access token', { exact: false }).fill(bearer);
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
-  await expect(page.getByLabel('Month', { exact: true })).toBeEnabled();
+  await expect(page.getByRole('region', { name: 'Income', exact: true })).toBeVisible();
   await selectMonth(page, month);
   await expect(page.getByRole('region', { name: 'Income', exact: true })).toBeVisible();
 }
 export async function selectMonth(page: Page, selectedMonth: string) {
   const year = page.getByRole('spinbutton', { name: 'Year', exact: true });
-  await year.fill(selectedMonth.slice(0, 4)); await year.press('Enter');
-  await expect(year).toBeEnabled();
-  await page.getByRole('button', { name: 'Month', exact: true }).click();
-  await page.getByRole('button', { name: new Intl.DateTimeFormat('en', { month: 'long' }).format(new Date(2020, Number(selectedMonth.slice(5)) - 1, 1)), exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Month', exact: true })).toBeEnabled();
+  const picker = page.getByRole('button', { name: 'Month', exact: true });
+  await expect(picker).toBeEnabled();
+  if (await year.inputValue() !== selectedMonth.slice(0, 4)) {
+    const opened = page.waitForRequest(request => request.url().includes(`/monthly-sheets/${selectedMonth.slice(0, 4)}-`) && request.url().endsWith('/open'));
+    await year.fill(selectedMonth.slice(0, 4)); await year.press('Enter');
+    await (await opened).response();
+    await expect(year).toBeEnabled();
+  }
+  const monthName = new Intl.DateTimeFormat('en', { month: 'long' }).format(new Date(2020, Number(selectedMonth.slice(5)) - 1, 1));
+  if ((await picker.textContent())?.trim() !== monthName) {
+    const opened = page.waitForRequest(request => request.url().endsWith(`/monthly-sheets/${selectedMonth}/open`));
+    await picker.click();
+    await page.getByRole('button', { name: monthName, exact: true }).click();
+    await (await opened).response();
+    await expect(picker).toBeEnabled();
+  }
 }
 export async function addItem(page: Page, section: string, name: string, amount: string, repeat = false, usual = false) {
   const region = page.getByRole('region', { name: section, exact: true });
