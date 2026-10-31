@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/crabnuggets/folio/services/api/internal/auth"
+	"github.com/crabnuggets/folio/services/api/internal/chatgpt"
 	"github.com/crabnuggets/folio/services/api/internal/config"
 	"github.com/crabnuggets/folio/services/api/internal/httpapi"
 	"github.com/crabnuggets/folio/services/api/internal/store"
@@ -46,7 +47,11 @@ func run() error {
 		return err
 	}
 	defer db.Close()
-	handler, err := httpapi.NewWithWebDistDir(db, cfg.OwnerID, middleware, cfg.WebDistDir)
+	connection, err := chatgpt.New(db, cfg.OwnerID, cfg.ChatGPT)
+	if err != nil {
+		return err
+	}
+	handler, err := httpapi.NewWithWebDistDir(db, cfg.OwnerID, middleware, cfg.WebDistDir, connection)
 	if err != nil {
 		return err
 	}

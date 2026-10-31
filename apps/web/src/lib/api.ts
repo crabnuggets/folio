@@ -39,7 +39,7 @@ export class ApiClient {
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
     try {
       const response = await this.transport(`/api/v1${path}`, {
-        ...init, credentials: 'omit', cache: 'no-store', redirect: 'error', signal: controller.signal,
+        ...init, credentials: path === '/chatgpt/connect' ? 'same-origin' : 'omit', cache: 'no-store', redirect: 'error', signal: controller.signal,
         headers: { 'Content-Type': 'application/json', ...init.headers, Authorization: `Bearer ${this.token}` },
       });
       if (generation !== this.generation) throw new ApiError(401, 'SESSION_ENDED', 'The session ended. Sign in again.');

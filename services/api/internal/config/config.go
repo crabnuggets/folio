@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/crabnuggets/folio/services/api/internal/auth"
+	"github.com/crabnuggets/folio/services/api/internal/chatgpt"
 	"github.com/crabnuggets/folio/services/api/internal/domain"
 )
 
@@ -17,6 +18,7 @@ type Config struct {
 	OwnerID     string
 	WebDistDir  string
 	Auth        auth.Config
+	ChatGPT     chatgpt.Config
 }
 
 // Load reads configuration from process environment variables, returning FromEnv errors.
@@ -69,5 +71,9 @@ func FromEnv(get func(string) string) (Config, error) {
 	if strings.ContainsRune(webDistDir, '\x00') {
 		return Config{}, errors.New("WEB_DIST_DIR must be a valid filesystem path")
 	}
-	return Config{Address: ":" + port, DatabaseURL: databaseURL, OwnerID: owner, WebDistDir: webDistDir, Auth: a}, nil
+	connection := chatgpt.Config{RedirectURI: get("CHATGPT_REDIRECT_URI"), EncryptionKey: get("CHATGPT_ENCRYPTION_KEY")}
+	if err := chatgpt.Validate(connection); err != nil {
+		return Config{}, err
+	}
+	return Config{Address: ":" + port, DatabaseURL: databaseURL, OwnerID: owner, WebDistDir: webDistDir, Auth: a, ChatGPT: connection}, nil
 }
