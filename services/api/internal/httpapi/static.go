@@ -14,7 +14,7 @@ import (
 
 // serveWeb serves files from a configured build directory. Every file is opened
 // through os.Root so decoded URL paths and symlinks cannot escape the build root.
-func serveWeb(w http.ResponseWriter, r *http.Request, webDistDir string) {
+func serveWeb(w http.ResponseWriter, r *http.Request, webDistDir, authOrigin string) {
 	if r.Method != http.MethodGet && r.Method != http.MethodHead || reservedWebPath(r.URL.Path) {
 		writeError(w, r, domain.NotFound())
 		return
@@ -54,7 +54,7 @@ func serveWeb(w http.ResponseWriter, r *http.Request, webDistDir string) {
 	}
 	defer file.Close()
 
-	setStaticHeaders(w, name)
+	setStaticHeaders(w, name, authOrigin)
 	info, err := file.Stat()
 	if err != nil {
 		writeError(w, r, domain.Fail(500, "INTERNAL_ERROR", "The request could not be completed"))
@@ -133,12 +133,16 @@ func acceptsHTML(header string) bool {
 	return false
 }
 
-func setStaticHeaders(w http.ResponseWriter, name string) {
+func setStaticHeaders(w http.ResponseWriter, name, authOrigin string) {
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("X-Frame-Options", "DENY")
 	w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
 	w.Header().Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
-	w.Header().Set("Content-Security-Policy", "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; font-src 'self' data:")
+	connect := "'self'"
+	if authOrigin != "" {
+		connect += " " + authOrigin
+	}
+	w.Header().Set("Content-Security-Policy", "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src "+connect+"; font-src 'self' data:")
 	switch {
 	case name == "index.html":
 		w.Header().Set("Cache-Control", "no-cache")

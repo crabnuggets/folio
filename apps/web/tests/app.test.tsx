@@ -9,10 +9,11 @@ const emptySheet: S['MonthlySheet'] = { month: '2026-10', version: 1, currency: 
 function mount() { render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false } } })}><App /></QueryClientProvider>); }
 function transport() { return vi.fn<typeof fetch>(async (input, init) => {
   const url = String(input); if (url.endsWith('/settings')) return new Response(JSON.stringify(settings));
+  if (url === '/auth/config') return new Response('{"development_key":true}');
   if (url.endsWith('/open')) return new Response(JSON.stringify(emptySheet)); if (url.includes('monthly-item-suggestions')) return new Response('{"items":[]}');
   if (init?.method !== 'GET') throw new TypeError('Synthetic connection loss'); return new Response(JSON.stringify(emptySheet));
 }); }
-async function signIn() { fireEvent.change(screen.getByLabelText('Access token', { exact: false }), { target: { value: 'synthetic-test-only-bearer' } }); fireEvent.click(screen.getByRole('button', { name: 'Sign in' })); await screen.findByRole('heading', { name: 'Monthly remainder' }); }
+async function signIn() { fireEvent.change(await screen.findByLabelText('Access token', { exact: false }), { target: { value: 'synthetic-test-only-bearer' } }); fireEvent.click(screen.getByRole('button', { name: 'Sign in' })); await screen.findByRole('heading', { name: 'Monthly remainder' }); }
 it('preserves add values and blocks month change after an uncertain write', async () => {
   vi.stubGlobal('fetch', transport()); mount(); await signIn(); fireEvent.click(screen.getByRole('button', { name: 'Add item to Income' }));
   fireEvent.change(screen.getByRole('combobox', { name: 'Name' }), { target: { value: 'Salary' } }); fireEvent.change(screen.getByLabelText('Amount', { exact: true }), { target: { value: '6400' } }); fireEvent.click(screen.getByRole('button', { name: 'Save item' }));

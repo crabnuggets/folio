@@ -46,7 +46,7 @@ func run() error {
 		return err
 	}
 	defer db.Close()
-	handler, err := httpapi.NewWithWebDistDir(db, cfg.OwnerID, middleware, cfg.WebDistDir)
+	handler, err := httpapi.NewWithWebDistDir(db, cfg.OwnerID, middleware, cfg.WebDistDir, cfg.BrowserAuth)
 	if err != nil {
 		return err
 	}

@@ -17,6 +17,7 @@ type Config struct {
 	OwnerID     string
 	WebDistDir  string
 	Auth        auth.Config
+	BrowserAuth auth.BrowserConfig
 }
 
 // Load reads configuration from process environment variables, returning FromEnv errors.
@@ -69,5 +70,20 @@ func FromEnv(get func(string) string) (Config, error) {
 	if strings.ContainsRune(webDistDir, '\x00') {
 		return Config{}, errors.New("WEB_DIST_DIR must be a valid filesystem path")
 	}
-	return Config{Address: ":" + port, DatabaseURL: databaseURL, OwnerID: owner, WebDistDir: webDistDir, Auth: a}, nil
+	browser := auth.BrowserConfig{DevelopmentKey: env == "development" && mode == "dev"}
+	if key := get("SUPABASE_PUBLISHABLE_KEY"); key != "" {
+		if mode != "jwt" || !strings.HasPrefix(key, "sb_publishable_") || strings.ContainsAny(key, " \t\r\n") {
+			return Config{}, errors.New("SUPABASE_PUBLISHABLE_KEY requires JWT mode and a Supabase publishable key")
+		}
+		issuer, _ := url.Parse(a.Issuer)
+		if strings.TrimRight(issuer.Path, "/") != "/auth/v1" {
+			return Config{}, errors.New("Google sign-in requires a Supabase JWT_ISSUER ending in /auth/v1")
+		}
+		browser.SupabaseURL = issuer.Scheme + "://" + issuer.Host
+		browser.PublishableKey = key
+	}
+	if webDistDir != "" && mode == "jwt" && browser.PublishableKey == "" {
+		return Config{}, errors.New("SUPABASE_PUBLISHABLE_KEY is required when serving the web app in JWT mode")
+	}
+	return Config{Address: ":" + port, DatabaseURL: databaseURL, OwnerID: owner, WebDistDir: webDistDir, Auth: a, BrowserAuth: browser}, nil
 }

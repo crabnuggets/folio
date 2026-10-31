@@ -55,7 +55,7 @@ func browserHandler(t *testing.T, webDistDir string) http.Handler {
 		if webDistDir == "" {
 			return httpapi.New(store.NewMemory(), ownerID, middleware), nil
 		}
-		return httpapi.NewWithWebDistDir(store.NewMemory(), ownerID, middleware, webDistDir)
+		return httpapi.NewWithWebDistDir(store.NewMemory(), ownerID, middleware, webDistDir, auth.BrowserConfig{DevelopmentKey: true})
 	}
 	api, err := newAPI()
 	if err != nil {
