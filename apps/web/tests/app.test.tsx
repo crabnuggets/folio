@@ -1,9 +1,11 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { StrictMode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { App } from '../src/App';
-import type { S } from '../src/lib/api';
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+import { ApiClient, type S } from '../src/lib/api';
+import { MonthlySheet } from '../src/MonthlySheet';
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.useRealTimers(); });
 const settings: S['Settings'] = { currency: 'SGD', currency_exponent: 2, timezone: 'Asia/Singapore', version: 1 };
 const emptySheet: S['MonthlySheet'] = { month: '2026-10', version: 1, currency: 'SGD', currency_exponent: 2, currency_locked: false, has_legacy_data: false, undo_token: null, money_in_minor: '0', money_out_minor: '0', remainder_minor: '0', missing_count: 0, sections: [{ id: 'income', name: 'Income', direction: 'in', amount_label: 'Amount', total_minor: '0', missing_count: 0, items: [] }] };
 function mount() { render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false } } })}><App /></QueryClientProvider>); }
@@ -25,4 +27,31 @@ it('clears private state on sign out and never persists the bearer', async () =>
   const header = screen.getByRole('banner'); expect(header.contains(screen.getByRole('button', { name: 'Export JSON' }))).toBe(true); expect(header.contains(screen.getByRole('button', { name: 'Sign out' }))).toBe(true);
   fireEvent.click(screen.getByRole('button', { name: 'Sign out' }));
   await screen.findByRole('button', { name: 'Sign in' }); expect(screen.queryByRole('heading', { name: 'Monthly remainder' })).toBeNull(); expect(storage).not.toHaveBeenCalled(); storage.mockRestore();
+});
+
+it('ignores a delayed StrictMode startup load after changing the reporting month', async () => {
+  vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(new Date('2026-11-01T04:00:00Z'));
+  let changingMonth = false; let settingsCount = 0;
+  let releasePrevious = () => {}; let releaseCurrent = () => {}; let currentStarted = () => {};
+  const current = new Promise<void>(resolve => { currentStarted = resolve; });
+  const api = new ApiClient(async input => {
+    const url = String(input);
+    if (url.endsWith('/settings')) {
+      settingsCount++;
+      if (changingMonth) await new Promise<void>(resolve => { releaseCurrent = resolve; currentStarted(); });
+      else if (settingsCount === 1) await new Promise<void>(resolve => { releasePrevious = resolve; });
+      return Response.json(settings);
+    }
+    return Response.json({ ...emptySheet, month: url.includes('/2026-10/') ? '2026-10' : '2026-11', remainder_minor: url.includes('/2026-10/') ? '10000' : '0' });
+  });
+  api.setToken('synthetic-test-only-bearer');
+  render(<StrictMode><QueryClientProvider client={new QueryClient()}><MonthlySheet api={api} signedIn onDirty={() => {}} onLogout={() => {}} /></QueryClientProvider></StrictMode>);
+  try {
+    await screen.findByRole('heading', { name: 'Monthly remainder' }); changingMonth = true;
+    fireEvent.click(screen.getByRole('button', { name: 'Month' })); fireEvent.click(screen.getByRole('button', { name: 'October' }));
+    await current;
+    await act(async () => { releasePrevious(); });
+    await act(async () => { releaseCurrent(); });
+    await screen.findByText('SGD 100.00');
+  } finally { releasePrevious(); releaseCurrent(); }
 });

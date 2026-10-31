@@ -9,10 +9,21 @@ export function loadBrowserAuth() {
     const response = await fetch('/auth/config', { credentials: 'omit', cache: 'no-store', redirect: 'error' });
     if (!response.ok) throw new Error('Sign-in is unavailable. Reload to try again.');
     const config: BrowserAuth = await response.json();
-    const client = config.supabase_url && config.publishable_key ? new AuthClient({
+    if (!config.supabase_url || !config.publishable_key) return { config, client: null };
+    // The SDK uses storageKey for broadcasts too. Isolate each document while
+    // retaining stable sessionStorage keys for reloads and PKCE verifiers.
+    const storage = sessionStorage;
+    const storageKey = `${authStorageKey}-${crypto.randomUUID()}`;
+    const persistedKey = (key: string) => authStorageKey + key.slice(storageKey.length);
+    const client = new AuthClient({
       url: `${config.supabase_url}/auth/v1`, headers: { apikey: config.publishable_key, Authorization: `Bearer ${config.publishable_key}` },
-      flowType: 'pkce', detectSessionInUrl: false, persistSession: true, autoRefreshToken: true, storage: sessionStorage, storageKey: authStorageKey,
-    }) : null;
+      flowType: 'pkce', detectSessionInUrl: false, persistSession: true, autoRefreshToken: true, storageKey,
+      storage: {
+        getItem: key => storage.getItem(persistedKey(key)),
+        setItem: (key, value) => storage.setItem(persistedKey(key), value),
+        removeItem: key => storage.removeItem(persistedKey(key)),
+      },
+    });
     return { config, client };
   })().catch(error => { initialization = undefined; throw error; });
 }
