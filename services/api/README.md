@@ -51,6 +51,33 @@ unset in this workflow: Go then serves only API and health routes, and Vite serv
 the development client. The explicit `AUTH_MODE=dev` token from the API setup is
 accepted for local API calls; production refuses this mode.
 
+### ChatGPT connection and assisted entry
+
+The bottom chat bar accepts a description, screenshot, PDF, or plain text file.
+ChatGPT proposes items for the selected monthly sheet. Review and edit each item,
+then add it explicitly. Totals change only after the ordinary monthly-item command
+succeeds. Uploads support PNG, JPEG, WebP, PDF, and UTF-8 text, one file up to 8 MiB.
+Only the submitted message, file, selected month, and section definitions go to
+OpenAI. Folio does not retain the uploaded file after extraction.
+
+To enable a ChatGPT plan connection on your computer, set
+`CHATGPT_REDIRECT_URI=http://127.0.0.1:8080/auth/chatgpt/callback` and
+`CHATGPT_ENCRYPTION_KEY` to a private, base64-encoded 32-byte key before starting
+Go. The callback port must be the Go server's port. Generate the key once with
+`node -e "process.stdout.write(require('node:crypto').randomBytes(32).toString('base64'))"`.
+Keep it stable across restarts so Folio can decrypt the saved connection. Open
+the frontend at `http://127.0.0.1:5173` when using Vite, or at the Go server's
+`127.0.0.1` address when serving the compiled app. Choose **Continue with ChatGPT**
+and authorize plan usage in the popup. No OpenAI API key is needed.
+
+This uses OpenAI's documented [open-source plan authorization flow](https://developers.openai.com/siwc/token-sharing-open-source/sign-in),
+which requires a `127.0.0.1` callback on the computer running the browser. A remote
+Render deployment cannot complete that local flow. Without local configuration,
+the bar explains that a connection is unavailable. It never switches to paid API
+usage. Connection credentials are encrypted in PostgreSQL and excluded from
+financial exports. Disconnect removes Folio's saved credentials; account-side
+permissions can be managed in ChatGPT.
+
 ### Built frontend and static hosting
 
 Set `WEB_DIST_DIR` to a built Vite `dist` directory to enable Go's optional SPA

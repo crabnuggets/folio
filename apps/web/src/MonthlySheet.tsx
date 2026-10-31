@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { ApiClient, ApiError, errorMessage, isUncertain, type Command, type S } from './lib/api';
 import { formatMoney, moneyInput, parseMoney } from './lib/money';
 import { Form, text } from './components/Form';
+import { TransactionChat } from './TransactionChat';
 
 type Sheet = S['MonthlySheet'];
 type Item = S['MonthlyItem'];
@@ -40,7 +41,8 @@ export function MonthlySheet({ api, signedIn, onDirty, onLogout }: { api: ApiCli
   const retainedRows = useRef(new Map<string, Item>());
   const [addSection, setAddSection] = useState<string | null>(null);
   const [notice, setNotice] = useState('');
-  const blocked = dirty.size > 0 || queue.current.length > 0;
+  const [chatDirty, setChatDirty] = useState(false);
+  const blocked = dirty.size > 0 || queue.current.length > 0 || chatDirty;
   const accept = (value: Sheet) => { sheetRef.current = value; setSheet(value); };
   const markDirty = (key: string, value: boolean) => {
     if (value) dirtyRef.current.add(key); else dirtyRef.current.delete(key);
@@ -195,6 +197,13 @@ export function MonthlySheet({ api, signedIn, onDirty, onLogout }: { api: ApiCli
       </>}
       <footer>Folio · Monthly amounts, one sheet. The remainder is not a bank balance.</footer>
     </main>
+    <TransactionChat api={api} signedIn={signedIn} month={month} sheet={sheet} available={Boolean(available)} saving={queue.current.length > 0} onDirty={setChatDirty} feedback={feedback} locked={locked} onAdd={async (key, input, done) => {
+      const latest = sheetRef.current;
+      if (!latest || !available || queue.current.length > 0) return false;
+      const direction = latest.sections.find(section => section.id === input.section_id)?.direction;
+      if (latest.sections.some(section => section.direction === direction && section.items.some(item => normalize(item.name) === normalize(input.name)))) throw new Error('An item with this name already exists on this side of the sheet. Edit that item, or use a different name.');
+      return perform(key, current => api.command<'MonthlySheet'>(`/monthly-sheets/${month}/items`, input, { version: current.version }), done);
+    }} />
   </div>;
 }
 

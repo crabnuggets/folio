@@ -62,6 +62,12 @@ describe('financial request safety', () => {
 });
 
 describe('authentication and private reads', () => {
+  it('uses a same-origin cookie only when starting ChatGPT authorization', async () => {
+    const transport = vi.fn<typeof fetch>().mockResolvedValue(json({ authorization_url: 'https://auth.openai.com/' }));
+    const api = new ApiClient(transport); api.setToken('owner');
+    await api.command<'ChatGPTConnectResponse'>('/chatgpt/connect', {}).run();
+    expect(transport.mock.calls[0][1]?.credentials).toBe('same-origin');
+  });
   it('uses an in-memory bearer with no cookies, redirects or browser cache', async () => {
     const transport = vi.fn<typeof fetch>().mockResolvedValue(json(settings));
     const api = new ApiClient(transport);
