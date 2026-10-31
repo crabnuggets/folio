@@ -31,16 +31,20 @@ export class ApiClient {
 
   setToken(token: string | null) { this.token = token; this.generation++; }
 
+  // A refreshed token represents the same verified session. Keep in-flight commands valid.
+  refreshToken(token: string) { this.token = token; }
+
   private async request<T>(path: string, init: RequestInit): Promise<T> {
     if (!path.startsWith('/') || path.startsWith('//') || path.includes('..')) throw new Error('Invalid API path');
     if (!this.token) throw new ApiError(401, 'UNAUTHENTICATED', 'Sign in to continue.');
     const generation = this.generation;
+    const token = this.token;
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
     try {
       const response = await this.transport(`/api/v1${path}`, {
         ...init, credentials: 'omit', cache: 'no-store', redirect: 'error', signal: controller.signal,
-        headers: { 'Content-Type': 'application/json', ...init.headers, Authorization: `Bearer ${this.token}` },
+        headers: { 'Content-Type': 'application/json', ...init.headers, Authorization: `Bearer ${token}` },
       });
       if (generation !== this.generation) throw new ApiError(401, 'SESSION_ENDED', 'The session ended. Sign in again.');
       let data: unknown;
@@ -51,6 +55,7 @@ export class ApiClient {
       // the current generation itself, so preserve its actual authentication error.
       if (generation !== this.generation) throw new ApiError(401, 'SESSION_ENDED', 'The session ended. Sign in again.');
       if (response.status === 401) {
+        if (token !== this.token) throw new UncertainError();
         this.setToken(null);
         this.onUnauthorized();
       }

@@ -30,9 +30,15 @@ export { expect };
 export async function signIn(page: Page) {
   await page.goto('/'); await page.getByLabel('Access token', { exact: false }).fill(bearer);
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
-  await expect(page.getByLabel('Month', { exact: true })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Add item to Income', exact: true })).toBeEnabled();
+  const year = await page.getByRole('spinbutton', { name: 'Year', exact: true }).inputValue();
+  const selectedMonth = await page.getByRole('button', { name: 'Month', exact: true }).textContent();
+  const monthName = new Intl.DateTimeFormat('en', { month: 'long' }).format(new Date(2020, Number(month.slice(5)) - 1, 1));
+  const loaded = year === month.slice(0, 4) && selectedMonth?.trim() === monthName ? undefined
+    : page.waitForResponse(response => response.url().endsWith(`/monthly-sheets/${month}/open`));
   await selectMonth(page, month);
-  await expect(page.getByRole('region', { name: 'Income', exact: true })).toBeVisible();
+  await loaded;
+  await expect(page.getByRole('button', { name: 'Add item to Income', exact: true })).toBeEnabled();
 }
 export async function selectMonth(page: Page, selectedMonth: string) {
   const year = page.getByRole('spinbutton', { name: 'Year', exact: true });

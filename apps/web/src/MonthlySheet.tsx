@@ -28,6 +28,7 @@ export function MonthlySheet({ api, signedIn, onDirty, onLogout }: { api: ApiCli
   const sheetRef = useRef<Sheet>(undefined);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<unknown>();
+  const loadRequest = useRef(0);
   const openCommand = useRef<Command<Sheet>>(undefined);
   const loadedMonth = useRef('');
   const [online, setOnline] = useState(navigator.onLine);
@@ -86,23 +87,26 @@ export function MonthlySheet({ api, signedIn, onDirty, onLogout }: { api: ApiCli
     });
   };
   const load = async (open = false) => {
+    const request = ++loadRequest.current;
     setLoading(true); setLoadError(undefined);
     try {
       let result: Sheet;
       const settings = await api.get<'Settings'>('/settings');
+      if (request !== loadRequest.current) return false;
       if (open && settings.currency === 'SGD') {
         openCommand.current ??= api.command<'MonthlySheet'>(`/monthly-sheets/${month}/open`, {});
         result = await openCommand.current.run();
       } else result = await api.get<'MonthlySheet'>(`/monthly-sheets/${month}`);
+      if (request !== loadRequest.current) return false;
       setRedoToken(undefined); accept(result); loadedMonth.current = month; return true;
-    } catch (error) { setLoadError(error); return false; }
-    finally { setLoading(false); }
+    } catch (error) { if (request === loadRequest.current) setLoadError(error); return false; }
+    finally { if (request === loadRequest.current) setLoading(false); }
   };
   useEffect(() => {
+    loadRequest.current++;
     openCommand.current = undefined; setSheet(undefined); sheetRef.current = undefined; setJobs({});
-    if (signedIn) void load(true);
   }, [month]);
-  useEffect(() => { if (signedIn && loadedMonth.current !== month && !loading) void load(true); }, [signedIn]);
+  useEffect(() => { if (signedIn && loadedMonth.current !== month) void load(true); }, [month, signedIn]);
   useEffect(() => { onDirty(blocked); }, [blocked]);
   useEffect(() => {
     const update = () => setOnline(navigator.onLine);
@@ -254,7 +258,7 @@ function ItemRow({ item, section, sheet, api, available, locked, feedback, perfo
     {feedback}
     {placementChanged && <p className="row-status">{current ? `Moved to ${sheet.sections.find(section => section.id === current.section_id)?.name} in another tab.` : 'Skipped in another tab.'} Your unsaved edits remain here. Save to reapply or discard them.</p>}
     {edited.current && !locked && <div className="row-status">Saved amount: {!current || item.amount_minor == null ? 'Not entered' : formatMoney(item.amount_minor, sheet.currency, sheet.currency_exponent)}<div><button onClick={() => save(true)} disabled={!available}>{current ? 'Save amount' : 'Restore and reapply amount'}</button><button data-discard-amount={item.id} onClick={() => { edited.current = false; markDirty(item.id, false); setValue(moneyInput(item.amount_minor, sheet.currency_exponent)); setError(''); requestAnimationFrame(() => document.getElementById(`item-${item.id}`)?.focus()); }}>Discard edit</button></div></div>}
-    {details && <ItemDetails item={item} sheet={sheet} api={api} perform={perform} saveEdit={saveEdit} disabled={locked || !available || edited.current} markDirty={markDirty} onClose={() => { setDetails(false); requestAnimationFrame(() => document.getElementById(`item-${item.id}`)?.focus()); }} clean={clean} />}
+    {details && <ItemDetails item={item} sheet={sheet} api={api} perform={perform} saveEdit={saveEdit} disabled={locked || !available || edited.current} markDirty={markDirty} onClose={() => { setDetails(false); document.getElementById(`item-${item.id}`)?.focus(); }} clean={clean} />}
   </div>;
 }
 function ItemDetails({ item, sheet, api, perform, saveEdit, disabled, markDirty, onClose, clean }: {

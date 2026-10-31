@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/crabnuggets/folio/services/api/internal/auth"
 	"github.com/crabnuggets/folio/services/api/internal/domain"
 	"github.com/crabnuggets/folio/services/api/internal/store"
 )
@@ -39,16 +40,20 @@ type errorEnvelope struct {
 // middleware wraps /api/v1/; nil denies all API access. Responses receive request
 // and security headers, and recovered panics produce a public internal error.
 func New(db store.Store, ownerID string, middleware func(http.Handler) http.Handler) http.Handler {
-	return newServer(db, ownerID, middleware, "")
+	return newServer(db, ownerID, middleware, "", auth.BrowserConfig{})
 }
 
 // NewWithWebDistDir builds the API and optionally serves a built React SPA from
 // webDistDir. An empty path preserves API-only behavior. A configured directory
 // must exist and contain a regular index.html; static files are opened beneath
 // that directory and never replace API or health responses.
-func NewWithWebDistDir(db store.Store, ownerID string, middleware func(http.Handler) http.Handler, webDistDir string) (http.Handler, error) {
+func NewWithWebDistDir(db store.Store, ownerID string, middleware func(http.Handler) http.Handler, webDistDir string, settings ...auth.BrowserConfig) (http.Handler, error) {
+	var browser auth.BrowserConfig
+	if len(settings) > 0 {
+		browser = settings[0]
+	}
 	if strings.TrimSpace(webDistDir) == "" {
-		return New(db, ownerID, middleware), nil
+		return newServer(db, ownerID, middleware, "", browser), nil
 	}
 	root, err := os.OpenRoot(webDistDir)
 	if err != nil {
@@ -71,15 +76,18 @@ func NewWithWebDistDir(db store.Store, ownerID string, middleware func(http.Hand
 	if err != nil || !indexInfo.Mode().IsRegular() {
 		return nil, errors.New("WEB_DIST_DIR index.html must be a regular file")
 	}
-	return newServer(db, ownerID, middleware, webDistDir), nil
+	return newServer(db, ownerID, middleware, webDistDir, browser), nil
 }
 
-func newServer(db store.Store, ownerID string, middleware func(http.Handler) http.Handler, webDistDir string) http.Handler {
+func newServer(db store.Store, ownerID string, middleware func(http.Handler) http.Handler, webDistDir string, browser auth.BrowserConfig) http.Handler {
 	s := &server{db, ownerID}
 	api := http.NewServeMux()
 	s.routes(api)
 	api.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) { writeError(w, r, domain.NotFound()) })
 	root := http.NewServeMux()
+	root.HandleFunc("GET /auth/config", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, r, 200, browser, 0)
+	})
 	root.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, r, 200, map[string]string{"status": "ok"}, 0)
 	})
@@ -102,7 +110,7 @@ func newServer(db store.Store, ownerID string, middleware func(http.Handler) htt
 	root.Handle("/api/v1/", middleware(api))
 	root.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if webDistDir != "" {
-			serveWeb(w, r, webDistDir)
+			serveWeb(w, r, webDistDir, browser.SupabaseURL)
 			return
 		}
 		writeError(w, r, domain.NotFound())
