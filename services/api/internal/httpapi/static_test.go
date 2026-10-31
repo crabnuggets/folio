@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/crabnuggets/folio/services/api/internal/auth"
 	"github.com/crabnuggets/folio/services/api/internal/httpapi"
 	"github.com/crabnuggets/folio/services/api/internal/store"
 )
@@ -25,7 +26,7 @@ func staticHarness(t *testing.T) (http.Handler, string) {
 	if err := os.WriteFile(filepath.Join(root, "assets", "app-a1b2c3.js"), []byte("window.folio = true;"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	handler, err := httpapi.NewWithWebDistDir(store.NewMemory(), ownerID, nil, root)
+	handler, err := httpapi.NewWithWebDistDir(store.NewMemory(), ownerID, nil, root, auth.BrowserConfig{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -148,11 +149,11 @@ func TestWebDistPathTraversalCannotReadOutsideBuildRoot(t *testing.T) {
 
 func TestWebDistRequiresIndexAndEmptyPathKeepsAPIOnlyMode(t *testing.T) {
 	empty := t.TempDir()
-	if _, err := httpapi.NewWithWebDistDir(store.NewMemory(), ownerID, nil, empty); err == nil {
+	if _, err := httpapi.NewWithWebDistDir(store.NewMemory(), ownerID, nil, empty, auth.BrowserConfig{}); err == nil {
 		t.Fatal("configured static directory without index.html was accepted")
 	}
 
-	handler, err := httpapi.NewWithWebDistDir(store.NewMemory(), ownerID, nil, "")
+	handler, err := httpapi.NewWithWebDistDir(store.NewMemory(), ownerID, nil, "", auth.BrowserConfig{})
 	if err != nil {
 		t.Fatal(err)
 	}

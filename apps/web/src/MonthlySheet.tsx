@@ -29,8 +29,8 @@ export function MonthlySheet({ api, signedIn, onDirty, onLogout }: { api: ApiCli
   const sheetRef = useRef<Sheet>(undefined);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<unknown>();
-  const openCommand = useRef<Command<Sheet>>(undefined);
   const loadRequest = useRef(0);
+  const openCommand = useRef<Command<Sheet>>(undefined);
   const loadedMonth = useRef('');
   const [online, setOnline] = useState(navigator.onLine);
   const [jobs, setJobs] = useState<Record<string, Job>>({});
@@ -105,11 +105,11 @@ export function MonthlySheet({ api, signedIn, onDirty, onLogout }: { api: ApiCli
     finally { if (request === loadRequest.current) setLoading(false); }
   };
   useEffect(() => {
+    loadRequest.current++;
     openCommand.current = undefined; setSheet(undefined); sheetRef.current = undefined; setJobs({});
-    if (signedIn) void load(true);
     return () => { loadRequest.current++; };
   }, [month]);
-  useEffect(() => { if (signedIn && loadedMonth.current !== month && !loading) void load(true); }, [signedIn]);
+  useEffect(() => { if (signedIn && loadedMonth.current !== month) void load(true); }, [month, signedIn]);
   useEffect(() => { onDirty(blocked); }, [blocked]);
   useEffect(() => {
     const update = () => setOnline(navigator.onLine);

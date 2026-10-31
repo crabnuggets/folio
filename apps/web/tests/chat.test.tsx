@@ -15,6 +15,7 @@ function setup(options: { lostWrite?: boolean; expiredCapture?: boolean; connect
   let writes = 0;
   const transport = vi.fn<typeof fetch>(async (input, init) => {
     const path = String(input);
+    if (path === '/auth/config') return json({ development_key: true });
     if (path.endsWith('/settings')) return json(settings);
     if (path.endsWith('/chatgpt/connection')) return json(options.connected === false ? { ...connection, available: false, connected: false, sharing: false, email: '', models: [], reason: 'ChatGPT is not configured for this server.' } : connection);
     if (path.endsWith('/capture')) return options.expiredCapture ? json({ error: { code: 'UNAUTHENTICATED', message: 'Session expired.' } }, 401) : json(capture);
@@ -34,7 +35,7 @@ function setup(options: { lostWrite?: boolean; expiredCapture?: boolean; connect
   return transport;
 }
 async function signIn() {
-  fireEvent.change(screen.getByLabelText('Access token', { exact: false }), { target: { value: 'synthetic-chat-owner' } });
+  fireEvent.change(await screen.findByLabelText('Access token', { exact: false }), { target: { value: 'synthetic-chat-owner' } });
   fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
   await screen.findByRole('heading', { name: 'Monthly remainder' });
 }

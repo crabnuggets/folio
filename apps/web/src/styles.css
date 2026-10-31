@@ -32,6 +32,7 @@ fieldset { border:0; padding:0; margin:0; min-width:0; }
 .login-card .brand { margin-bottom:36px; }
 .login-card h1 { margin-bottom:16px; }
 .login-card .fine-print { margin:24px 0 0; }
+.google-sign-in { display:flex; align-items:center; justify-content:center; gap:12px; width:100%; border-radius:4px; font-weight:500; }
 .field { display:flex; flex-direction:column; gap:6px; margin-bottom:16px; min-width:0; }
 .check-field { display:flex; flex-direction:row; align-items:center; gap:10px; min-height:44px; margin:0; }
 .check-field label { order:1; line-height:1.5; }

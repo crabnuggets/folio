@@ -51,7 +51,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	handler, err := httpapi.NewWithWebDistDir(db, cfg.OwnerID, middleware, cfg.WebDistDir, connection)
+	handler, err := httpapi.NewWithWebDistDir(db, cfg.OwnerID, middleware, cfg.WebDistDir, cfg.BrowserAuth, connection)
 	if err != nil {
 		return err
 	}

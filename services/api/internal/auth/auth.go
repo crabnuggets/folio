@@ -22,6 +22,13 @@ import (
 )
 
 type Config struct{ Mode, Environment, OwnerID, DevToken, Issuer, Audience, JWKSURL string }
+
+// BrowserConfig contains only public settings needed by the web sign-in screen.
+type BrowserConfig struct {
+	DevelopmentKey bool   `json:"development_key"`
+	SupabaseURL    string `json:"supabase_url,omitempty"`
+	PublishableKey string `json:"publishable_key,omitempty"`
+}
 type verifier struct {
 	config               Config
 	client               *http.Client

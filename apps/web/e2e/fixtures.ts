@@ -30,9 +30,9 @@ export { expect };
 export async function signIn(page: Page) {
   await page.goto('/'); await page.getByLabel('Access token', { exact: false }).fill(bearer);
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
-  await expect(page.getByRole('region', { name: 'Income', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Add item to Income', exact: true })).toBeEnabled();
   await selectMonth(page, month);
-  await expect(page.getByRole('region', { name: 'Income', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Add item to Income', exact: true })).toBeEnabled();
 }
 export async function selectMonth(page: Page, selectedMonth: string) {
   const year = page.getByRole('spinbutton', { name: 'Year', exact: true });
