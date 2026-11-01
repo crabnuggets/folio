@@ -18,5 +18,6 @@ COPY --from=build /folio /folio
 COPY --from=web-build /src/apps/web/dist /app/web/dist
 ENV WEB_DIST_DIR=/app/web/dist
 EXPOSE 8080
+COPY infra/supabase-ca.crt /app/supabase-ca.crt
 USER nonroot:nonroot
 ENTRYPOINT ["/folio"]
