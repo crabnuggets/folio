@@ -346,6 +346,7 @@ type LegacySummary struct {
 	Complete          bool   `json:"complete"`
 }
 type State struct {
+	ChatGPTConnection     *ChatGPTConnection              `json:"chatgpt_connection,omitempty"`
 	MonthlySheet          MonthlySheetState               `json:"monthly_sheet"`
 	Settings              Settings                        `json:"settings"`
 	Accounts              map[string]Account              `json:"accounts"`
@@ -363,6 +364,14 @@ type State struct {
 	Drafts                map[string]Draft                `json:"drafts"`
 	AuditEvents           []Audit                         `json:"audit_events"`
 	LegacySummaries       []LegacySummary                 `json:"legacy_summaries"`
+}
+
+// ChatGPTConnection keeps the installation identity and encrypted OAuth credentials.
+// API exports omit this private provider state.
+type ChatGPTConnection struct {
+	HostID      string `json:"host_id"`
+	ClientID    string `json:"client_id"`
+	Credentials string `json:"credentials"`
 }
 
 // NewState initializes empty collections and SGD settings in the Asia/Singapore timezone.

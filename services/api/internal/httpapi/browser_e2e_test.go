@@ -27,7 +27,11 @@ func TestBrowserServer(t *testing.T) {
 	if os.Getenv("FOLIO_BROWSER_E2E") != "1" {
 		t.Skip("set FOLIO_BROWSER_E2E=1 explicitly to run the browser test server")
 	}
-	listener, err := net.Listen("tcp4", "127.0.0.1:18080")
+	port := os.Getenv("FOLIO_BROWSER_PORT")
+	if port == "" {
+		port = "18080"
+	}
+	listener, err := net.Listen("tcp4", net.JoinHostPort("127.0.0.1", port))
 	if err != nil {
 		t.Fatal(err)
 	}

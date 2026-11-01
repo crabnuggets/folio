@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { ApiClient, ApiError, errorMessage, isUncertain, type Command, type S } from './lib/api';
 import { formatMoney, moneyInput, parseMoney } from './lib/money';
 import { Form, text } from './components/Form';
+import { TransactionChat } from './TransactionChat';
 
 type Sheet = S['MonthlySheet'];
 type Item = S['MonthlyItem'];
@@ -41,7 +42,8 @@ export function MonthlySheet({ api, signedIn, onDirty, onLogout }: { api: ApiCli
   const retainedRows = useRef(new Map<string, Item>());
   const [addSection, setAddSection] = useState<string | null>(null);
   const [notice, setNotice] = useState('');
-  const blocked = dirty.size > 0 || queue.current.length > 0;
+  const [chatDirty, setChatDirty] = useState(false);
+  const blocked = dirty.size > 0 || queue.current.length > 0 || chatDirty;
   const accept = (value: Sheet) => { sheetRef.current = value; setSheet(value); };
   const markDirty = (key: string, value: boolean) => {
     if (value) dirtyRef.current.add(key); else dirtyRef.current.delete(key);
@@ -105,6 +107,7 @@ export function MonthlySheet({ api, signedIn, onDirty, onLogout }: { api: ApiCli
   useEffect(() => {
     loadRequest.current++;
     openCommand.current = undefined; setSheet(undefined); sheetRef.current = undefined; setJobs({});
+    return () => { loadRequest.current++; };
   }, [month]);
   useEffect(() => { if (signedIn && loadedMonth.current !== month) void load(true); }, [month, signedIn]);
   useEffect(() => { onDirty(blocked); }, [blocked]);
@@ -199,6 +202,13 @@ export function MonthlySheet({ api, signedIn, onDirty, onLogout }: { api: ApiCli
       </>}
       <footer>Folio · Monthly amounts, one sheet. The remainder is not a bank balance.</footer>
     </main>
+    <TransactionChat api={api} signedIn={signedIn} month={month} sheet={sheet} available={Boolean(available)} saving={queue.current.length > 0} onDirty={setChatDirty} feedback={feedback} locked={locked} onAdd={async (key, input, done) => {
+      const latest = sheetRef.current;
+      if (!latest || !available || queue.current.length > 0) return false;
+      const direction = latest.sections.find(section => section.id === input.section_id)?.direction;
+      if (latest.sections.some(section => section.direction === direction && section.items.some(item => normalize(item.name) === normalize(input.name)))) throw new Error('An item with this name already exists on this side of the sheet. Edit that item, or use a different name.');
+      return perform(key, current => api.command<'MonthlySheet'>(`/monthly-sheets/${month}/items`, input, { version: current.version }), done);
+    }} />
   </div>;
 }
 
@@ -258,7 +268,7 @@ function ItemRow({ item, section, sheet, api, available, locked, feedback, perfo
     {feedback}
     {placementChanged && <p className="row-status">{current ? `Moved to ${sheet.sections.find(section => section.id === current.section_id)?.name} in another tab.` : 'Skipped in another tab.'} Your unsaved edits remain here. Save to reapply or discard them.</p>}
     {edited.current && !locked && <div className="row-status">Saved amount: {!current || item.amount_minor == null ? 'Not entered' : formatMoney(item.amount_minor, sheet.currency, sheet.currency_exponent)}<div><button onClick={() => save(true)} disabled={!available}>{current ? 'Save amount' : 'Restore and reapply amount'}</button><button data-discard-amount={item.id} onClick={() => { edited.current = false; markDirty(item.id, false); setValue(moneyInput(item.amount_minor, sheet.currency_exponent)); setError(''); requestAnimationFrame(() => document.getElementById(`item-${item.id}`)?.focus()); }}>Discard edit</button></div></div>}
-    {details && <ItemDetails item={item} sheet={sheet} api={api} perform={perform} saveEdit={saveEdit} disabled={locked || !available || edited.current} markDirty={markDirty} onClose={() => { setDetails(false); document.getElementById(`item-${item.id}`)?.focus(); }} clean={clean} />}
+    {details && <ItemDetails item={item} sheet={sheet} api={api} perform={perform} saveEdit={saveEdit} disabled={locked || !available || edited.current} markDirty={markDirty} onClose={() => { setDetails(false); requestAnimationFrame(() => { if (document.activeElement === document.body) document.getElementById(`item-${item.id}`)?.focus(); }); }} clean={clean} />}
   </div>;
 }
 function ItemDetails({ item, sheet, api, perform, saveEdit, disabled, markDirty, onClose, clean }: {

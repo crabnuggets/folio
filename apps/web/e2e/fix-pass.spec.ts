@@ -35,6 +35,26 @@ test('amount Tab traverses both ways, exits boundaries, and returns to item opti
   expect((await backend.get<'MonthlySheet'>(`/monthly-sheets/${month}`)).money_in_minor).toBe('12200');
 });
 
+test('closing details does not overwrite a newer focus target', async ({ page, backend }) => {
+  await backend.add('Salary', '10000'); await signIn(page);
+  await page.getByRole('button', { name: 'Salary', exact: true }).click();
+  await expect(page.getByLabel('Name', { exact: true })).toBeFocused();
+  // Hold the close callback until the user has moved focus elsewhere.
+  await page.evaluate(() => {
+    const requestFrame = window.requestAnimationFrame;
+    window.requestAnimationFrame = callback => {
+      window.requestAnimationFrame = requestFrame;
+      window.addEventListener('release-close-focus', () => callback(performance.now()), { once: true });
+      return 0;
+    };
+  });
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+  const field = page.getByLabel('Amount for Salary', { exact: true });
+  await field.focus();
+  await page.evaluate(() => window.dispatchEvent(new Event('release-close-focus')));
+  expect(await field.evaluate(element => element === document.activeElement)).toBe(true);
+});
+
 test('dirty first amount keeps focus on item options while Shift+Tab autosaves', async ({ page, backend }) => {
   await backend.add('Salary', '10000'); await signIn(page);
   let releaseSave = () => {};

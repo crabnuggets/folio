@@ -155,6 +155,13 @@ add("MonthlySection", {**SCHEMAS["MonthlySectionDefinition"]["properties"], "tot
 add("MonthlySheet", {"month": MONTH, "version": VERSION, "currency": CURRENCY, "currency_exponent": {"type": "integer", "minimum": 0, "maximum": 4}, "currency_locked": BOOL, "has_legacy_data": BOOL, "undo_token": nullable(ID), "money_in_minor": AMOUNT, "money_out_minor": AMOUNT, "remainder_minor": AMOUNT, "missing_count": {"type": "integer", "minimum": 0}, "sections": array(ref("MonthlySection"))})
 add("MonthlyItemSuggestion", {"id": ID, "name": S, "section_id": ID, "section_name": S, "direction": direction, "repeat_monthly": BOOL, "usual_amount_minor": nullable(AMOUNT), "current_month_item_id": nullable(ID)})
 add("MonthlyItemSuggestions", {"items": array(ref("MonthlyItemSuggestion"))})
+add("ChatGPTModel", {"id": S, "name": S})
+add("ChatGPTConnection", {"available": BOOL, "connected": BOOL, "sharing": BOOL, "email": S, "reason": S, "models": array(ref("ChatGPTModel"))})
+add("ChatGPTConnectResponse", {"authorization_url": {"type": "string", "format": "uri"}})
+add("ChatAttachment", {"name": {"type": "string", "minLength": 1, "maxLength": 255}, "media_type": {"type": "string", "enum": ["image/png", "image/jpeg", "image/webp", "application/pdf", "text/plain"]}, "data": {"type": "string", "contentEncoding": "base64", "description": "Original file bytes, base64 encoded. Maximum decoded size 8 MiB."}})
+add("ChatCaptureInput", {"text": {"type": "string", "maxLength": 12000}, "model": {"type": "string", "minLength": 1}, "attachment": ref("ChatAttachment")}, ["text", "model"])
+add("ChatCaptureItem", {"name": {"type": "string", "minLength": 1, "maxLength": 120}, "section_id": ID, "amount_minor": nullable(AMOUNT), "note": {"type": "string", "maxLength": 2000}})
+add("ChatCaptureResponse", {"message": S, "items": {"type": "array", "maxItems": 20, "items": ref("ChatCaptureItem")}}, description="Proposals only. No financial state changes until the owner reviews and saves items through monthly sheet commands.")
 add("MonthlyUsualInput", {"section_id": nullable(ID)}, [])
 add("MonthlyUndoInput", {"undo_token": ID})
 add("MonthlySectionInput", {"name": {"type": "string", "minLength": 1, "maxLength": 120}, "direction": direction})
@@ -260,6 +267,14 @@ operation("/monthly-sheets/{month}/undo", "post", "undoMonthlySheet", "MonthlySh
 operation("/monthly-sheets/{month}/sections", "post", "createMonthlySection", "MonthlySheet", "MonthlySectionInput", version=True)
 operation("/monthly-sheets/{month}/sections/{id}", "put", "renameMonthlySection", "MonthlySheet", "MonthlySectionRename", version=True)
 operation("/monthly-item-suggestions", "get", "suggestMonthlyItems", "MonthlyItemSuggestions")
+operation("/chatgpt/connection", "get", "getChatGPTConnection", "ChatGPTConnection")
+operation("/chatgpt/connect", "post", "connectChatGPT", "ChatGPTConnectResponse", "EmptyInput")
+operation("/chatgpt/disconnect", "post", "disconnectChatGPT", "ChatGPTConnection", "EmptyInput")
+operation("/monthly-sheets/{month}/capture", "post", "captureMonthlyItems", "ChatCaptureResponse", "ChatCaptureInput")
+for path in ["/chatgpt/connect", "/chatgpt/disconnect", "/monthly-sheets/{month}/capture"]:
+    # Connection operations and read-only extraction do not post financial records.
+    PATHS[path]["post"]["parameters"] = [p for p in PATHS[path]["post"]["parameters"] if p.get("$ref") != "#/components/parameters/IdempotencyKey"]
+PATHS["/monthly-sheets/{month}/capture"]["post"]["responses"]["413"] = response(ref("ErrorEnvelope"), "Attachment exceeds 8 MiB or JSON request exceeds 12 MiB")
 PATHS["/monthly-item-suggestions"]["get"]["parameters"] = [{"name": "month", "in": "query", "required": True, "schema": MONTH}, {"name": "section_id", "in": "query", "required": True, "schema": ID}, {"name": "q", "in": "query", "schema": S}]
 operation("/imports", "post", "createImport", "ImportJob", "ImportRequest", status=202, deferred=True)
 operation("/imports/{id}", "get", "getImport", "ImportJob", deferred=True)

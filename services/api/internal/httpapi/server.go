@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/crabnuggets/folio/services/api/internal/auth"
+	"github.com/crabnuggets/folio/services/api/internal/chatgpt"
 	"github.com/crabnuggets/folio/services/api/internal/domain"
 	"github.com/crabnuggets/folio/services/api/internal/store"
 )
@@ -24,8 +25,9 @@ import (
 const MaxBodyBytes int64 = 1 << 20
 
 type server struct {
-	store store.Store
-	owner string
+	store   store.Store
+	owner   string
+	chatgpt *chatgpt.Client
 }
 type errorEnvelope struct {
 	Error struct {
@@ -47,13 +49,9 @@ func New(db store.Store, ownerID string, middleware func(http.Handler) http.Hand
 // webDistDir. An empty path preserves API-only behavior. A configured directory
 // must exist and contain a regular index.html; static files are opened beneath
 // that directory and never replace API or health responses.
-func NewWithWebDistDir(db store.Store, ownerID string, middleware func(http.Handler) http.Handler, webDistDir string, settings ...auth.BrowserConfig) (http.Handler, error) {
-	var browser auth.BrowserConfig
-	if len(settings) > 0 {
-		browser = settings[0]
-	}
+func NewWithWebDistDir(db store.Store, ownerID string, middleware func(http.Handler) http.Handler, webDistDir string, browser auth.BrowserConfig, connections ...*chatgpt.Client) (http.Handler, error) {
 	if strings.TrimSpace(webDistDir) == "" {
-		return newServer(db, ownerID, middleware, "", browser), nil
+		return newServer(db, ownerID, middleware, "", browser, connections...), nil
 	}
 	root, err := os.OpenRoot(webDistDir)
 	if err != nil {
@@ -76,15 +74,19 @@ func NewWithWebDistDir(db store.Store, ownerID string, middleware func(http.Hand
 	if err != nil || !indexInfo.Mode().IsRegular() {
 		return nil, errors.New("WEB_DIST_DIR index.html must be a regular file")
 	}
-	return newServer(db, ownerID, middleware, webDistDir, browser), nil
+	return newServer(db, ownerID, middleware, webDistDir, browser, connections...), nil
 }
 
-func newServer(db store.Store, ownerID string, middleware func(http.Handler) http.Handler, webDistDir string, browser auth.BrowserConfig) http.Handler {
-	s := &server{db, ownerID}
+func newServer(db store.Store, ownerID string, middleware func(http.Handler) http.Handler, webDistDir string, browser auth.BrowserConfig, connections ...*chatgpt.Client) http.Handler {
+	s := &server{store: db, owner: ownerID}
+	if len(connections) > 0 {
+		s.chatgpt = connections[0]
+	}
 	api := http.NewServeMux()
 	s.routes(api)
 	api.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) { writeError(w, r, domain.NotFound()) })
 	root := http.NewServeMux()
+	root.HandleFunc("GET /auth/chatgpt/callback", s.chatGPTCallback)
 	root.HandleFunc("GET /auth/config", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, r, 200, browser, 0)
 	})
@@ -353,6 +355,8 @@ func lookup[T any](r *http.Request, values map[string]T) (T, error) {
 // routes registers financial reads, mutations, export, and deferred integration
 // endpoints, which respond with 501 FEATURE_NOT_AVAILABLE.
 func (s *server) routes(m *http.ServeMux) {
+	s.chatGPTRoutes(m)
+	s.captureRoutes(m)
 	s.monthlyRoutes(m)
 	m.HandleFunc("GET /api/v1/settings", func(w http.ResponseWriter, r *http.Request) {
 		s.read(w, r, func(st *domain.State) (any, int64, error) { return st.Settings, st.Settings.Version, nil })
@@ -579,11 +583,13 @@ func (s *server) routes(m *http.ServeMux) {
 	m.HandleFunc("GET /api/v1/exports", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Disposition", `attachment; filename="folio-export-v1.json"`)
 		s.read(w, r, func(st *domain.State) (any, int64, error) {
+			financialState := *st
+			financialState.ChatGPTConnection = nil
 			return struct {
 				SchemaVersion int           `json:"schema_version"`
 				ExportedAt    time.Time     `json:"exported_at"`
 				State         *domain.State `json:"state"`
-			}{1, time.Now().UTC(), st}, 0, nil
+			}{1, time.Now().UTC(), &financialState}, 0, nil
 		})
 	})
 	for _, pattern := range []string{"POST /api/v1/imports", "GET /api/v1/imports/{id}", "POST /api/v1/gmail/connect", "GET /api/v1/gmail/callback", "POST /api/v1/gmail/sync", "DELETE /api/v1/gmail/connection", "POST /api/v1/capture/text"} {
