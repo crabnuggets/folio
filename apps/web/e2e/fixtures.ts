@@ -35,23 +35,22 @@ export async function signIn(page: Page) {
   await expect(page.getByRole('button', { name: 'Add item to Income', exact: true })).toBeEnabled();
 }
 export async function selectMonth(page: Page, selectedMonth: string) {
-  const year = page.getByRole('spinbutton', { name: 'Year', exact: true });
-  const picker = page.getByRole('button', { name: 'Month', exact: true });
+  const picker = page.getByRole('button', { name: /^Month:/ });
   await expect(picker).toBeEnabled();
-  if (await year.inputValue() !== selectedMonth.slice(0, 4)) {
-    const opened = page.waitForRequest(request => request.url().includes(`/monthly-sheets/${selectedMonth.slice(0, 4)}-`) && request.url().endsWith('/open'));
-    await year.fill(selectedMonth.slice(0, 4)); await year.press('Enter');
-    await (await opened).response();
-    await expect(year).toBeEnabled();
-  }
   const monthName = new Intl.DateTimeFormat('en', { month: 'long' }).format(new Date(2020, Number(selectedMonth.slice(5)) - 1, 1));
-  if ((await picker.textContent())?.trim() !== monthName) {
-    const opened = page.waitForRequest(request => request.url().endsWith(`/monthly-sheets/${selectedMonth}/open`));
-    await picker.click();
-    await page.getByRole('button', { name: monthName, exact: true }).click();
-    await (await opened).response();
-    await expect(picker).toBeEnabled();
+  if ((await picker.textContent())?.trim() === `${monthName} ${selectedMonth.slice(0, 4)}`) return;
+  const opened = page.waitForRequest(request => request.url().endsWith(`/monthly-sheets/${selectedMonth}/open`));
+  await picker.click();
+  const target = Number(selectedMonth.slice(0, 4));
+  for (let year = Number(await page.locator('.year-stepper span').textContent()); year !== target; year += year < target ? 1 : -1) {
+    await page.getByRole('button', { name: year < target ? 'Next year' : 'Previous year', exact: true }).click();
   }
+  await page.getByRole('button', { name: monthName, exact: true }).click();
+  await (await opened).response();
+  await expect(picker).toBeEnabled();
+}
+export async function openMenu(page: Page) {
+  await page.getByRole('banner').getByRole('button', { name: 'Menu', exact: true }).click();
 }
 export async function addItem(page: Page, section: string, name: string, amount: string, repeat = false, usual = false) {
   const region = page.getByRole('region', { name: section, exact: true });
@@ -60,7 +59,7 @@ export async function addItem(page: Page, section: string, name: string, amount:
   await form.getByRole('combobox', { name: 'Name', exact: true }).fill(name);
   await form.getByLabel(section === 'Credit cards' ? 'Bill amount' : 'Amount', { exact: true }).fill(amount);
   if (repeat) await form.getByRole('switch', { name: 'Repeat monthly' }).check();
-  if (usual) await form.getByLabel('Suggest this amount each month').check();
+  if (usual) await form.getByLabel('Make this the usual amount').check();
   await form.getByRole('button', { name: 'Save item', exact: true }).click();
   await expect(form).toHaveCount(0);
 }

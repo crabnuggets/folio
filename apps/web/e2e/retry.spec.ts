@@ -1,4 +1,6 @@
+import type { Page } from '@playwright/test';
 import { test, expect, bearer, month, sectionIds, signIn } from './fixtures';
+const row = (page: Page) => page.locator('.sheet-row').filter({ has: page.getByLabel('Amount for Salary', { exact: true }) });
 test('lost committed add retries the same command across renewed sign-in', async ({ page, backend }) => {
   await signIn(page); await page.getByRole('button', { name: 'Add item to Income', exact: true }).click();
   const form = page.getByRole('form', { name: 'Add item to Income' });
@@ -10,8 +12,8 @@ test('lost committed add retries the same command across renewed sign-in', async
     const response = await route.fetch(attempts.length === 2 ? { headers: { ...request.headers(), authorization: 'Bearer expired-synthetic-token-only' } } : {});
     statuses.push(response.status()); if (attempts.length === 1) await route.abort('connectionfailed'); else await route.fulfill({ response });
   });
-  await form.getByRole('button', { name: 'Save item' }).click(); const retry = page.getByRole('button', { name: 'Retry same action' }); await expect(retry).toBeVisible();
-  await expect(form.getByLabel('Amount', { exact: true })).toHaveValue('6400'); await expect(page.getByLabel('Month', { exact: true })).toBeDisabled(); await expect(form.getByRole('button', { name: 'Save item' })).toBeDisabled();
+  await form.getByRole('button', { name: 'Save item' }).click(); const retry = page.getByRole('button', { name: 'Try again' }); await expect(retry).toBeVisible();
+  await expect(form.getByLabel('Amount', { exact: true })).toHaveValue('6400'); await expect(page.getByRole('button', { name: /^Month:/ })).toBeDisabled(); await expect(form.getByRole('button', { name: 'Save item' })).toBeDisabled();
   expect((await backend.get<'MonthlySheet'>(`/monthly-sheets/${month}`)).sections.flatMap(section => section.items)).toHaveLength(1);
   await retry.click(); await expect(page.getByLabel('Access token', { exact: false })).toBeVisible();
   await page.getByLabel('Access token', { exact: false }).fill(bearer); await page.getByRole('button', { name: 'Sign in', exact: true }).click();
@@ -27,7 +29,8 @@ test('stale row edits compare latest before a fresh explicit save', async ({ pag
   const field = page.getByLabel('Amount for Salary', { exact: true }); await field.fill('6600'); await field.press('Tab');
   await expect(page.getByRole('button', { name: 'Compare latest' })).toBeVisible(); await expect(field).toHaveValue('6600');
   await page.getByRole('button', { name: 'Compare latest' }).click(); await expect(field).toHaveValue('6600');
-  await page.getByRole('button', { name: 'Save amount' }).click(); await expect(page.getByLabel('Month', { exact: true })).toBeEnabled();
+  await expect(row(page)).toContainText('Latest saved SGD 6,500.00');
+  await page.getByRole('button', { name: 'Keep my 6,600.00' }).click(); await expect(page.getByRole('button', { name: /^Month:/ })).toBeEnabled();
   const saved = await backend.get<'MonthlySheet'>(`/monthly-sheets/${month}`); expect(saved.sections.flatMap(section => section.items)[0]).toMatchObject({ amount_minor: '660000', note: 'Concurrent saved note' });
 });
 test('queued row saves use fresh versions and preserve another typed row during failure', async ({ page, backend }) => {
@@ -40,8 +43,8 @@ test('queued row saves use fresh versions and preserve another typed row during 
     const response = await route.fetch(); if (attempts.length === 1) await route.abort('connectionfailed'); else await route.fulfill({ response });
   });
   await salary.fill('6500'); await reimbursement.focus(); await reimbursement.fill('85'); await reimbursement.press('Tab');
-  await expect(page.getByRole('button', { name: 'Retry same action' })).toBeVisible(); await expect(reimbursement).toHaveValue('85'); expect(attempts).toHaveLength(1);
-  await page.getByRole('button', { name: 'Retry same action' }).click(); await expect(page.getByLabel('Month', { exact: true })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Try again' })).toBeVisible(); await expect(reimbursement).toHaveValue('85'); expect(attempts).toHaveLength(1);
+  await page.getByRole('button', { name: 'Try again' }).click(); await expect(page.getByRole('button', { name: /^Month:/ })).toBeEnabled();
   expect(attempts).toHaveLength(3); expect(attempts[1]).toEqual(attempts[0]); expect(Number(attempts[2].version.replaceAll('"', ''))).toBeGreaterThan(Number(attempts[0].version.replaceAll('"', '')));
   expect((await backend.get<'MonthlySheet'>(`/monthly-sheets/${month}`)).money_in_minor).toBe('658500');
 });

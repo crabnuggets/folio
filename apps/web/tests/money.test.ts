@@ -6,11 +6,11 @@ describe('money precision at the user/API boundary', () => {
     ['5000', 2, '500000'], ['0.01', 2, '1'], ['00012.30', 2, '1230'], ['-0.01', 2, '-1'],
     ['-0', 2, '0'], ['123', 0, '123'], ['0.0001', 4, '1'],
     ['92233720368547758.07', 2, '9223372036854775807'], ['-92233720368547758.08', 2, '-9223372036854775808'],
-    ['90071992547409.93', 2, '9007199254740993'],
+    ['90071992547409.93', 2, '9007199254740993'], ['1,234.56', 2, '123456'], ['1,250', 2, '125000'], ['-1,000,000.05', 2, '-100000005'],
   ])('parses %s at exponent %i exactly', (input, exponent, expected) => {
     expect(parseMoney(input, Number(exponent))).toBe(expected);
   });
-  it.each(['', '1,234.56', '1,20', '1e4', '+1', '1.001', '.50', '1.', 'NaN', 'Infinity', '92233720368547758.08', '-92233720368547758.09'])('rejects ambiguous or out-of-range input %s', input => {
+  it.each(['', '12,4', '1,20', '1,2345', ',123', '1,,234', '1e4', '+1', '1.001', '.50', '1.', 'NaN', 'Infinity', '92233720368547758.08', '-92233720368547758.09'])('rejects ambiguous or out-of-range input %s', input => {
     expect(() => parseMoney(input, 2)).toThrow();
   });
   it('requires positive entries without treating unknown as zero', () => {

@@ -39,7 +39,7 @@ describe('financial request safety', () => {
     const action = api.command<'Settings'>('/settings', {}, { version: 1, method: 'PATCH' });
     const failure = await action.run().catch(error => error);
     expect(failure).toBeInstanceOf(ApiError); expect(failure.status).toBe(412);
-    expect(errorMessage(failure)).toContain('compare'); expect(transport).toHaveBeenCalledTimes(1);
+    expect(errorMessage(failure)).toContain('Compare'); expect(transport).toHaveBeenCalledTimes(1);
   });
   it('treats malformed successful JSON as uncertain and reuses the same key', async () => {
     const transport = vi.fn<typeof fetch>().mockResolvedValueOnce(new Response('{', { status: 201 })).mockResolvedValue(json(settings));

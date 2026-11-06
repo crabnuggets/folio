@@ -23,9 +23,9 @@ test('changing month cannot reuse a late load from the previous month', async ({
     await page.getByLabel('Access token', { exact: false }).fill(bearer);
     await page.getByRole('button', { name: 'Sign in', exact: true }).click();
     await expect(page.getByRole('region', { name: 'Income', exact: true })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Month', exact: true })).toBeEnabled();
+    await expect(page.getByRole('button', { name: /^Month:/ })).toBeEnabled();
     changingMonth = true;
-    await page.getByRole('button', { name: 'Month', exact: true }).click();
+    await page.getByRole('button', { name: /^Month:/ }).click();
     await page.getByRole('button', { name: 'October', exact: true }).click();
     await current;
     if (releasePrevious) {
@@ -35,7 +35,7 @@ test('changing month cannot reuse a late load from the previous month', async ({
     }
     releaseCurrent();
     await expect(page.getByLabel('Amount for Salary', { exact: true })).toHaveValue('100.00');
-    await expect(page.getByRole('button', { name: 'Month', exact: true })).toHaveText('October');
+    await expect(page.getByRole('button', { name: /^Month:/ })).toHaveText('October 2026');
   } finally { releasePrevious?.(); releaseCurrent(); }
 });
 

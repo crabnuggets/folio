@@ -1,15 +1,18 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ApiClient, ApiError, errorMessage, isUncertain, type Command, type S } from './lib/api';
-import { formatMoney, moneyInput, parseMoney } from './lib/money';
+import { formatMoney, formatMonth, groupAmount, monthNames, moneyInput, parseMoney } from './lib/money';
+import { Alert, Brand, Check, ChevronDown, ChevronLeft, ChevronRight, Close, More, Plus, Redo, Undo } from './components/Brand';
+import { Dialog } from './components/Dialog';
 import { Form, text } from './components/Form';
 import { TransactionChat } from './TransactionChat';
 
 type Sheet = S['MonthlySheet'];
 type Item = S['MonthlyItem'];
 type Section = S['MonthlySection'];
-type Job = { key: string; build(sheet: Sheet): Command<Sheet>; command?: Command<Sheet>; status: 'queued' | 'saving' | 'failed' | 'saved'; error?: unknown; uncertain?: boolean; done?(sheet: Sheet): void; resolve?(ok: boolean): void };
+type Job = { key: string; build(sheet: Sheet): Command<Sheet>; command?: Command<Sheet>; status: 'queued' | 'saving' | 'failed' | 'saved'; savedAt?: number; error?: unknown; uncertain?: boolean; done?(sheet: Sheet): void; resolve?(ok: boolean): void };
 type Perform = (key: string, build: Job['build'], done?: Job['done']) => Promise<boolean>;
+type Toast = { text: string; undo?: string; sticky?: boolean };
 const normalize = (name: string) => name.trim().replace(/\s+/g, ' ').toLowerCase();
 const findItem = (sheet: Sheet, id: string) => sheet.sections.flatMap(section => section.items).find(item => item.id === id)!;
 const updateInput = (item: Item): S['MonthlyItemUpdate'] => ({ section_id: item.section_id, name: item.name, amount_minor: item.amount_minor, note: item.note, repeat_monthly: item.repeat_monthly, usual_amount_minor: item.usual_amount_minor });
@@ -41,7 +44,11 @@ export function MonthlySheet({ api, signedIn, onDirty, onLogout }: { api: ApiCli
   // Keep dirty rows mounted in their original section until saved or discarded.
   const retainedRows = useRef(new Map<string, Item>());
   const [addSection, setAddSection] = useState<string | null>(null);
-  const [notice, setNotice] = useState('');
+  const [toast, setToast] = useState<Toast | null>(null);
+  const [managing, setManaging] = useState(false);
+  const [sectionFormKey, setSectionFormKey] = useState(0);
+  const [summaryElement, setSummaryElement] = useState<HTMLElement | null>(null);
+  const [summaryVisible, setSummaryVisible] = useState(true);
   const [chatDirty, setChatDirty] = useState(false);
   const blocked = dirty.size > 0 || queue.current.length > 0 || chatDirty;
   const accept = (value: Sheet) => { sheetRef.current = value; setSheet(value); };
@@ -70,7 +77,7 @@ export function MonthlySheet({ api, signedIn, onDirty, onLogout }: { api: ApiCli
       job.command ??= job.build(sheetRef.current);
       const result = await job.command.run();
       setRedoToken(job.key === 'undo' ? result.undo_token ?? undefined : undefined);
-      accept(result); job.status = 'saved'; job.error = undefined; publish(job);
+      accept(result); job.status = 'saved'; job.savedAt = Date.now(); job.error = undefined; publish(job);
       queue.current.shift(); job.done?.(result); job.resolve?.(true);
     } catch (error) {
       job.status = 'failed'; job.error = error;
@@ -112,6 +119,17 @@ export function MonthlySheet({ api, signedIn, onDirty, onLogout }: { api: ApiCli
   useEffect(() => { if (signedIn && loadedMonth.current !== month) void load(true); }, [month, signedIn]);
   useEffect(() => { onDirty(blocked); }, [blocked]);
   useEffect(() => {
+    if (!summaryElement || typeof IntersectionObserver === 'undefined') { setSummaryVisible(true); return; }
+    const observer = new IntersectionObserver(([entry]) => setSummaryVisible(entry.isIntersecting), { rootMargin: '-72px 0px 0px' });
+    observer.observe(summaryElement);
+    return () => observer.disconnect();
+  }, [summaryElement]);
+  useEffect(() => {
+    if (!toast || toast.sticky) return;
+    const timer = setTimeout(() => setToast(null), toast.undo ? 10000 : 6000);
+    return () => clearTimeout(timer);
+  }, [toast]);
+  useEffect(() => {
     const update = () => setOnline(navigator.onLine);
     window.addEventListener('online', update); window.addEventListener('offline', update);
     return () => { window.removeEventListener('online', update); window.removeEventListener('offline', update); };
@@ -128,15 +146,19 @@ export function MonthlySheet({ api, signedIn, onDirty, onLogout }: { api: ApiCli
     queue.current = queue.current.filter(value => !released.includes(value));
     released.forEach(value => value.resolve?.(false));
     setJobs(previous => { const next = { ...previous }; released.forEach(value => { delete next[value.key]; }); return next; });
-    setNotice(dirtyRef.current.size ? 'Latest saved values loaded. Your unsaved edits remain in their rows or form. Compare them, then save or discard.' : 'Latest saved values loaded. Review the current sheet before trying again.'); void drain();
+    setToast({ text: dirtyRef.current.size ? 'Latest saved values loaded. Choose which to keep in each changed row.' : 'Latest saved values loaded.' }); void drain();
   };
-  const feedback = (key: string) => {
+  const feedback = (key: string, detail?: React.ReactNode) => {
     const job = jobs[key];
     if (!job) return null;
-    return <div className={`row-status ${job.error ? 'error' : ''}`} role={job.error ? 'alert' : 'status'}>
-      {job.status === 'saving' ? 'Saving…' : job.status === 'queued' ? 'Waiting to save…' : job.status === 'saved' ? 'Saved' : `Not saved. ${errorMessage(job.error)}`}
-      {job.status === 'failed' && <div><button onClick={() => retry(job)} disabled={!online}>Retry same action</button>
-        {!job.uncertain && job.error instanceof ApiError && [400, 409, 412, 422].includes(job.error.status) && <button onClick={() => void compare(job)}>Compare latest</button>}</div>}
+    // A remounted row or a failure elsewhere must not replay an old confirmation.
+    if (job.status === 'saved' && (Date.now() - (job.savedAt ?? 0) > 2500 || Object.values(jobs).some(other => other.status === 'failed'))) return null;
+    return <div className={`row-status ${job.error ? 'error' : job.status}`} role={job.error ? 'alert' : 'status'}>
+      {job.status === 'saving' ? 'Saving…' : job.status === 'queued' ? 'Waiting…' : job.status === 'saved' ? 'Saved' : job.uncertain ? errorMessage(job.error) : `Not saved. ${errorMessage(job.error)}`}
+      {job.status === 'failed' && detail && <> {detail}</>}
+      {job.status === 'failed' && job.uncertain && ' Later changes wait until this one saves.'}
+      {job.status === 'failed' && <div className="actions">
+        {!job.uncertain && job.error instanceof ApiError && [400, 409, 412, 422].includes(job.error.status) ? <button className="primary" onClick={() => void compare(job)}>Compare latest</button> : <button className="primary" onClick={() => retry(job)} disabled={!online}>Try again</button>}</div>}
     </div>;
   };
   const locked = (key: string) => Boolean(jobs[key] && jobs[key].status !== 'saved');
@@ -150,82 +172,142 @@ export function MonthlySheet({ api, signedIn, onDirty, onLogout }: { api: ApiCli
     }
     return items;
   };
+  const history = (action: 'undo' | 'redo') => { setToast(null); return perform(action, latest => api.command<'MonthlySheet'>(`/monthly-sheets/${month}/undo`, { undo_token: latest.undo_token }, { version: latest.version })); };
+  const changeMonth = (value: string) => { setMonth(value); setAddSection(null); setToast(null); };
+  const hasEntries = Boolean(sheet && (sheet.sections.some(section => section.items.length > 0) || sheet.remainder_minor !== '0'));
+  const failed = Object.values(jobs).some(job => job.status === 'failed');
+  const pending = queue.current.length > 0;
+  const status = !online ? 'Waiting for connection' : loading ? 'Loading…' : loadError != null ? 'Not loaded' : failed ? 'Not saved' : pending ? 'Saving…' : dirty.size ? 'Unsaved changes' : chatDirty ? 'Draft in chat' : available ? 'All changes saved' : 'Unavailable';
   return <div className="sheet-shell"><a className="skip-link" href="#main">Skip to content</a>
-    <header className="sheet-topbar"><div className="brand"><span className="brand-mark" aria-hidden="true">f</span>Folio</div>
-      <div className="month-selector" role="group" aria-label="Reporting month">
-        <MonthPicker value={month.slice(5)} disabled={blocked || loading} onChange={value => { setMonth(month.slice(0, 5) + value); setAddSection(null); setNotice(''); }} />
-        <label className="sr-only" htmlFor="year">Year</label>
-        <input id="year" key={month.slice(0, 4)} type="number" min="1900" max="9999" defaultValue={month.slice(0, 4)} disabled={blocked || loading} onKeyDown={event => { if (event.key === 'Enter') event.currentTarget.blur(); }} onBlur={event => { const year = Number(event.target.value); if (Number.isInteger(year) && year >= 1900 && year <= 9999) { setMonth(String(year) + month.slice(4)); setAddSection(null); setNotice(''); } else event.target.value = month.slice(0, 4); }} />
-      </div>
-        <div className="actions"><button onClick={async () => {
+    <header className={`topbar ${!summaryVisible && sheet || status !== 'All changes saved' ? 'has-strip' : ''}`}><div className="topbar-inner">
+      <div className="topbar-lead"><Brand />{!summaryVisible && sheet && <span className="topbar-remainder">Remainder <strong className={sheet.remainder_minor.startsWith('-') ? 'money critical' : 'money'}>{money(sheet.remainder_minor)}</strong>{sheet.missing_count > 0 && <span className="attention"> · {sheet.missing_count} blank</span>}</span>}</div>
+      <MonthPicker month={month} current={currentMonth()} disabled={blocked || loading || !online} reason={blocked ? 'Save or discard your changes to switch months' : !online ? 'Reconnect to switch months' : undefined} onChange={changeMonth} />
+      <div className="topbar-tools">
+        {failed ? <button className="save-status is-failed" onClick={() => document.querySelector('.row-status.error')?.scrollIntoView?.({ block: 'center' })}><Alert />{status}</button> : <span className={`save-status ${status === 'All changes saved' ? '' : 'is-pending'} ${status === 'All changes saved' && !hasEntries || !sheet && loading ? 'is-idle' : ''}`} role="status">{status === 'All changes saved' && <Check />}{status}</span>}
+        <div className="history-tools">{(['undo', 'redo'] as const).map(action => <button key={action} className="icon-button" aria-label={action === 'undo' ? 'Undo' : 'Redo'} title={action === 'undo' ? 'Undo' : 'Redo'} disabled={blocked || !available || !sheet?.undo_token || (action === 'redo' ? redoToken !== sheet.undo_token : redoToken === sheet.undo_token)} onClick={() => void history(action)}>{action === 'undo' ? <Undo /> : <Redo />}</button>)}</div>
+        <AppMenu signOutDisabled={blocked || loading} sectionsDisabled={!sheet} onSections={() => setManaging(true)} onLogout={onLogout} onExport={async () => {
           try {
             const result = await api.get<'Export'>('/exports');
             const url = URL.createObjectURL(new Blob([JSON.stringify(result, null, 2)], { type: 'application/json' }));
             const link = document.createElement('a'); link.href = url; link.download = `folio-export-${new Date().toISOString().slice(0, 10)}.json`; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
-            setNotice('JSON export downloaded. It includes retained financial history.');
-          } catch (error) { setNotice(`Export failed. ${errorMessage(error)}`); }
-        }}>Export JSON</button><button disabled={blocked || loading} onClick={onLogout}>Sign out</button></div>
-    </header>
+            setToast({ text: 'JSON export downloaded. It includes retained financial history.' });
+          } catch (error) { setToast({ text: `Export failed. ${errorMessage(error)}`, sticky: true }); }
+        }} />
+      </div>
+    </div></header>
     <main id="main" className="sheet-main" tabIndex={-1}>
-      <div className="freshness" role="status">{!online ? 'Offline. Edits stay in this tab. Reconnect to save.' : loading ? 'Loading your sheet. The server may take a moment to wake up.' : 'Totals use saved amounts. Unsaved edits stay in their rows.'}</div>
-      <div className="actions history-actions"><span className="quiet" role="status">{blocked ? 'Unsaved changes' : available ? 'Saved' : 'Unavailable'}</span>{(['undo', 'redo'] as const).map(action => <button key={action} className="history-button" aria-label={action === 'undo' ? 'Undo' : 'Redo'} title={action === 'undo' ? 'Undo' : 'Redo'} disabled={blocked || !available || !sheet?.undo_token || (action === 'redo' ? redoToken !== sheet.undo_token : redoToken === sheet.undo_token)} onClick={() => void perform(action, latest => api.command<'MonthlySheet'>(`/monthly-sheets/${month}/undo`, { undo_token: latest.undo_token }, { version: latest.version }))}><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true" style={{ transform: action === 'redo' ? 'scaleX(-1)' : undefined }}><path d="M9 5 4 10l5 5M4 10h9a6 6 0 0 1 6 6v3" strokeLinecap="round" strokeLinejoin="round" /></svg></button>)}</div>
+      <div className={`page-status ${loading && online ? 'is-loading' : ''}`} role="status">{!online ? "You're offline. Amounts you type stay here until you reconnect and save them. Closing this tab loses them." : loading && !sheet ? 'Loading your sheet. The server may take a moment to wake up.' : ''}</div>
       {jobs.undo?.status !== 'saved' && feedback('undo')}{jobs.redo?.status !== 'saved' && feedback('redo')}
-      {notice && <p className="notice" role="status">{notice}</p>}
-      {loadError != null && <div className="notice error" role="alert">{sheet ? 'Saved data may be stale. ' : ''}{errorMessage(loadError)} <button onClick={() => void load(loadedMonth.current !== month)}>Retry loading</button></div>}
+      {loadError != null && <div className={`notice error ${sheet ? '' : 'load-failed'}`} role="alert"><span>{loadError instanceof ApiError && loadError.status < 500 ? errorMessage(loadError) : `Couldn't load ${formatMonth(month)}. Check your connection and try again.`}{sheet ? ' The amounts shown may be out of date.' : ''}</span><button onClick={() => void load(loadedMonth.current !== month)}>Retry loading</button></div>}
+      {!sheet && loading && <SheetSkeleton />}
       {sheet && <>
         {sheet.currency !== "SGD" && <p className="notice">Historical {sheet.currency} amounts are read-only and preserved in export. No currency conversion has been applied.</p>}
-        <section className="remainder" aria-label="Monthly summary"><h1>Monthly remainder</h1><output className="hero-amount">{money(sheet.remainder_minor)}</output>
-          <dl className="totals"><div><dt>Money in</dt><dd>{money(sheet.money_in_minor)}</dd></div><div><dt>Money out</dt><dd>{money(sheet.money_out_minor)}</dd></div></dl>
-          <p className="coverage">Based on entered amounts.{sheet.missing_count > 0 ? ` ${sheet.missing_count} ${sheet.missing_count === 1 ? 'item still blank' : 'items still blank'}.` : ' All listed amounts entered.'}</p>
+        <section className="remainder" aria-label="Monthly summary">
+          <div><h1>Monthly remainder</h1><output ref={setSummaryElement} className={`hero-amount ${sheet.remainder_minor.startsWith('-') ? 'is-negative' : ''} ${hasEntries ? '' : 'is-empty'}`}><Money text={hasEntries ? money(sheet.remainder_minor) : `${sheet.currency} —`} /></output>
+            <p className="summary-note">{hasEntries ? 'Money in minus money out. Not a bank balance.' : 'Start with Income: add what comes in, then what goes out.'}</p>
+            {sheet.missing_count > 0 && <p className="coverage"><span><span className="coverage-basis">Based on entered amounts · </span>{sheet.missing_count} {sheet.missing_count === 1 ? 'item still blank' : 'items still blank'}</span>
+              <button className="accent-button" onClick={() => document.querySelector<HTMLInputElement>('.amount-field:placeholder-shown:not(:disabled)')?.focus()}>Go to first blank</button></p>}</div>
+          <div className="summary-flow">
+            <dl className="totals"><div><dt>Money in</dt><dd>{hasEntries ? groupAmount(moneyInput(sheet.money_in_minor, sheet.currency_exponent)) : '—'}</dd></div><div><dt>Money out</dt><dd>{hasEntries ? groupAmount(moneyInput(sheet.money_out_minor, sheet.currency_exponent)) : '—'}</dd></div></dl>
+            <FlowMeter moneyIn={sheet.money_in_minor} moneyOut={sheet.money_out_minor} />
+          </div>
         </section>
         {sheet.has_legacy_data && <p className="notice">Your earlier financial data is retained separately and included in export. It has not been converted into monthly amounts.</p>}
-        {blocked && <p className="quiet" role="status">Unsaved edits stay in this month until saved or discarded.</p>}
 
         <div className="sheet-columns">{(['in', 'out'] as const).map(direction => <div className="sheet-column" key={direction}><h2>Money {direction}</h2>
           {sheet.sections.filter(section => section.direction === direction).map(section => <section className="sheet-section" key={section.id} aria-label={section.name}>
-            <div className="section-heading"><h3>{section.name}</h3><output aria-label={`${section.name} subtotal`}>{money(section.total_minor)}</output></div>
-            {section.amount_label === 'Bill amount' && <p className="amount-caption">Bill amount</p>}
-            {itemsIn(section).map(item => <ItemRow key={`${month}-${item.id}`} item={item} section={section} sheet={sheet} api={api} available={Boolean(available)} locked={locked(item.id) || locked(`${item.id}-restore`)} feedback={<>{feedback(item.id)}{feedback(`${item.id}-restore`)}</>} perform={perform} markDirty={markDirty} />)}
-            {!itemsIn(section).length && <p className="empty">Add your first item.</p>}
-            <div className="section-actions">{section.items.some(item => item.repeat_monthly && item.amount_minor == null && item.usual_amount_minor != null) && <button className="quiet-button" disabled={blocked || !available} onClick={() => void perform(`usual-${section.id}`, latest => api.command<'MonthlySheet'>(`/monthly-sheets/${month}/usual-amounts`, { section_id: section.id }, { version: latest.version }))}>Use usual amounts</button>}
-              <button id={`add-${section.id}`} className="quiet-button" disabled={!available || addSection !== null} onClick={() => { setAddSection(section.id); markDirty('add', true); }}>Add item<span className="sr-only"> to {section.name}</span></button></div>
+            <div className="section-heading"><div><h3>{section.name}</h3>{(section.amount_label === 'Bill amount' || section.missing_count > 0) && <span className="section-meta">{section.amount_label === 'Bill amount' && 'Bill amounts'}{section.amount_label === 'Bill amount' && section.missing_count > 0 && ' · '}{section.missing_count > 0 && <span className="attention">{section.missing_count} blank</span>}</span>}</div>{section.items.length > 0 && <output aria-label={`${section.name} subtotal`}>{groupAmount(moneyInput(section.total_minor, sheet.currency_exponent))}</output>}</div>
+            {itemsIn(section).map(item => <ItemRow key={`${month}-${item.id}`} item={item} section={section} sheet={sheet} api={api} available={Boolean(available)} locked={locked(item.id) || locked(`${item.id}-restore`)} failed={jobs[item.id]?.status === 'failed'} feedback={detail => <>{feedback(item.id, detail)}{feedback(`${item.id}-restore`)}</>} perform={perform} markDirty={markDirty} notify={setToast} />)}
+            {!itemsIn(section).length && hasEntries && <p className="empty">Nothing here this month.</p>}
+            <div className="section-actions">{addSection !== section.id && <button id={`add-${section.id}`} className="accent-button" disabled={!available || addSection !== null || failed} onClick={() => { setAddSection(section.id); markDirty('add', true); }}><Plus />Add item<span className="sr-only"> to {section.name}</span></button>}
+              {section.items.some(item => item.repeat_monthly && item.amount_minor == null && item.usual_amount_minor != null) && <button className="accent-button usual-button" disabled={blocked || !available} onClick={() => void perform(`usual-${section.id}`, latest => api.command<'MonthlySheet'>(`/monthly-sheets/${month}/usual-amounts`, { section_id: section.id }, { version: latest.version }))}>Use usual amounts</button>}</div>
             {feedback(`usual-${section.id}`)}
             {addSection === section.id && <AddItem section={section} sheet={sheet} api={api} signedIn={signedIn} perform={perform} locked={locked('add')} feedback={feedback('add')} focusItem={focusItem} close={() => { setAddSection(null); markDirty('add', false); requestAnimationFrame(() => document.getElementById(`add-${section.id}`)?.focus()); }} />}
           </section>)}
         </div>)}</div>
-        <details className="settings"><summary>Sheet options</summary>
-          <Form submit="Add section" disabled={blocked || !available} fields={[{ name: 'name', label: 'Section name', required: true }, { name: 'direction', label: 'Side', type: 'select', required: true, options: [{ value: 'in', label: 'Money in' }, { value: 'out', label: 'Money out' }] }]} onSubmit={async values => {
-            await perform('section-add', latest => api.command<'MonthlySheet'>(`/monthly-sheets/${month}/sections`, { name: text(values, 'name'), direction: text(values, 'direction') }, { version: latest.version }));
-          }} />{feedback('section-add')}
-          <div className="section-settings"><h3>Rename a section</h3>{sheet.sections.map(section => <SectionRename key={section.id} section={section} disabled={blocked || !available} perform={perform} api={api} month={month} feedback={feedback(`section-${section.id}`)} />)}</div>
-        </details>
+        <footer>All amounts in {sheet.currency}.</footer>
+        {managing && <Dialog title="Manage sections" onClose={() => setManaging(false)}><div className="settings-group"><h3>Rename sections</h3>
+          {(['in', 'out'] as const).map(direction => <div className="section-side-list" key={direction}><h4>Money {direction}</h4>{sheet.sections.filter(section => section.direction === direction).map(section => <SectionRename key={section.id} section={section} disabled={blocked || !available} perform={perform} api={api} month={month} feedback={feedback(`section-${section.id}`)} />)}</div>)}</div>
+          <div className="settings-group"><h3>Add a section</h3>
+          <Form key={sectionFormKey} submit="Add section" disabled={blocked || !available} fields={[{ name: 'name', label: 'Section name', required: true }, { name: 'direction', label: 'Money in or money out', type: 'select', required: true, options: [{ value: 'in', label: 'Money in' }, { value: 'out', label: 'Money out' }] }]} onSubmit={async values => {
+            if (await perform('section-add', latest => api.command<'MonthlySheet'>(`/monthly-sheets/${month}/sections`, { name: text(values, 'name'), direction: text(values, 'direction') }, { version: latest.version }))) setSectionFormKey(key => key + 1);
+          }} />{feedback('section-add')}</div>
+          <div className="dialog-footer"><button onClick={() => setManaging(false)}>Done</button></div>
+        </Dialog>}
       </>}
-      <footer>Folio · Monthly amounts, one sheet. The remainder is not a bank balance.</footer>
     </main>
-    <TransactionChat api={api} signedIn={signedIn} month={month} sheet={sheet} available={Boolean(available)} saving={queue.current.length > 0} onDirty={setChatDirty} feedback={feedback} locked={locked} onAdd={async (key, input, done) => {
-      const latest = sheetRef.current;
-      if (!latest || !available || queue.current.length > 0) return false;
-      const direction = latest.sections.find(section => section.id === input.section_id)?.direction;
-      if (latest.sections.some(section => section.direction === direction && section.items.some(item => normalize(item.name) === normalize(input.name)))) throw new Error('An item with this name already exists on this side of the sheet. Edit that item, or use a different name.');
-      return perform(key, current => api.command<'MonthlySheet'>(`/monthly-sheets/${month}/items`, input, { version: current.version }), done);
-    }} />
+    <div className="bottom-stack" hidden={!sheet && !toast}>
+      {toast && <div className="toast" role="status"><span className="toast-text">{toast.text}</span>
+        {toast.undo && <button className="toast-action" disabled={blocked || !available} onClick={() => void history('undo')}>{toast.undo}</button>}
+        <button className="toast-close" aria-label="Dismiss message" onClick={() => setToast(null)}><Close /></button></div>}
+      <TransactionChat api={api} signedIn={signedIn} month={month} sheet={sheet} available={Boolean(available)} unavailable={!online ? 'Chat needs a connection' : loadError != null ? 'Chat is unavailable until the sheet loads' : loading ? 'Loading your sheet…' : 'Chat is unavailable for this month'} saving={queue.current.length > 0} onDirty={setChatDirty} feedback={feedback} locked={locked} onAdd={async (key, input, done) => {
+        const latest = sheetRef.current;
+        if (!latest || !available || queue.current.length > 0) return false;
+        const direction = latest.sections.find(section => section.id === input.section_id)?.direction;
+        if (latest.sections.some(section => section.direction === direction && section.items.some(item => normalize(item.name) === normalize(input.name)))) throw new Error('An item with this name already exists on this side of the sheet. Edit that item, or use a different name.');
+        return perform(key, current => api.command<'MonthlySheet'>(`/monthly-sheets/${month}/items`, input, { version: current.version }), done);
+      }} />
+    </div>
+  </div>;
+}
+
+function Money({ text }: { text: string }) {
+  const index = text.indexOf(' ');
+  return <><span className="currency-code">{text.slice(0, index).replace('−', '')}</span> {text.startsWith('−') ? '−' : ''}{text.slice(index + 1)}</>;
+}
+
+function FlowMeter({ moneyIn, moneyOut }: { moneyIn: string; moneyOut: string }) {
+  const incoming = BigInt(moneyIn); const outgoing = BigInt(moneyOut);
+  if (outgoing <= 0n) return null;
+  const over = outgoing > incoming;
+  const percent = over ? 100 : Number(outgoing * 100n / incoming);
+  const caption = over ? 'Money out is more than money in' : `${percent}% of money in is going out`;
+  return <div><div className={`meter ${over ? 'is-over' : ''}`} role="img" aria-label={caption} title={caption}><span style={{ width: `${percent}%` }} /></div><p className="summary-note meter-caption">{caption}</p></div>;
+}
+
+function SheetSkeleton() {
+  return <div aria-hidden="true"><div className="remainder skeleton-hero"><div><span className="skeleton" style={{ width: 120, height: 14 }} /><span className="skeleton" style={{ width: 240, height: 44, marginTop: 12 }} /><span className="skeleton" style={{ width: 280, height: 14, marginTop: 12 }} /></div><div className="summary-flow"><span className="skeleton" style={{ height: 44 }} /><span className="skeleton" style={{ height: 6 }} /></div></div>
+    <div className="sheet-columns">{[[3, 4], [6, 4, 3]].map((cards, column) => <div key={column}><span className="skeleton skeleton-label" />{cards.map((lines, card) => <div className="skeleton-card" key={card}>{Array.from({ length: lines }, (_, line) => <span className="skeleton" key={line} />)}</div>)}</div>)}</div></div>;
+}
+
+function AppMenu({ signOutDisabled, sectionsDisabled, onSections, onExport, onLogout }: { signOutDisabled: boolean; sectionsDisabled: boolean; onSections(): void; onExport(): void; onLogout(): void }) {
+  const [open, setOpen] = useState(false);
+  const root = useRef<HTMLDivElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    const outside = (event: PointerEvent) => { if (!root.current?.contains(event.target as Node)) setOpen(false); };
+    document.addEventListener('pointerdown', outside);
+    return () => document.removeEventListener('pointerdown', outside);
+  }, []);
+  useEffect(() => { if (open) root.current?.querySelector<HTMLButtonElement>('.app-menu-list button:not(:disabled)')?.focus(); }, [open]);
+  const choose = (action: () => void) => () => { setOpen(false); trigger.current?.focus(); action(); };
+  return <div className="app-menu" ref={root} onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false); }} onKeyDown={event => { if (event.key === 'Escape' && open) { setOpen(false); trigger.current?.focus(); } }}>
+    <button ref={trigger} className="icon-button" aria-label="Menu" title="Menu" aria-expanded={open} onClick={() => setOpen(!open)}><More /></button>
+    {open && <div className="popover app-menu-list"><button disabled={sectionsDisabled} onClick={choose(onSections)}>Manage sections</button><button onClick={choose(onExport)}>Export JSON</button><hr /><button disabled={signOutDisabled} title={signOutDisabled ? 'Save or discard your changes to sign out' : undefined} onClick={choose(onLogout)}>Sign out</button></div>}
   </div>;
 }
 
 function SectionRename({ section, disabled, perform, api, month, feedback }: { section: Section; disabled: boolean; perform: Perform; api: ApiClient; month: string; feedback: React.ReactNode }) {
   const [name, setName] = useState(section.name);
   return <div><form className="section-rename" onSubmit={event => { event.preventDefault(); void perform(`section-${section.id}`, latest => api.command<'MonthlySheet'>(`/monthly-sheets/${month}/sections/${section.id}`, { name }, { method: 'PUT', version: latest.version })); }}>
-    <div className="field"><label htmlFor={`section-${section.id}`}>{section.name}</label><input id={`section-${section.id}`} value={name} onChange={event => setName(event.target.value)} required disabled={disabled} /></div><button disabled={disabled || name === section.name}>Rename</button>
+    <div className="field"><label className="sr-only" htmlFor={`section-${section.id}`}>{section.name}</label><input id={`section-${section.id}`} value={name} onChange={event => setName(event.target.value)} required disabled={disabled} /></div>{name !== section.name && <button disabled={disabled}>Rename</button>}
   </form>{feedback}</div>;
 }
 
-function ItemRow({ item, section, sheet, api, available, locked, feedback, perform, markDirty }: {
-  item: Item; section: Section; sheet: Sheet; api: ApiClient; available: boolean; locked: boolean; feedback: React.ReactNode; perform: Perform; markDirty(key: string, value: boolean): void;
+function ItemRow({ item, section, sheet, api, available, locked, failed, feedback, perform, markDirty, notify }: {
+  item: Item; section: Section; sheet: Sheet; api: ApiClient; available: boolean; locked: boolean; failed: boolean; feedback(detail?: React.ReactNode): React.ReactNode; perform: Perform; markDirty(key: string, value: boolean): void; notify(toast: Toast): void;
 }) {
   const [value, setValue] = useState(moneyInput(item.amount_minor, sheet.currency_exponent));
   const edited = useRef(false);
+  const editedFrom = useRef(item.amount_minor);
+  const detailsDirty = useRef(false);
+  const openedByTouch = useRef(false);
   const [error, setError] = useState('');
   const [details, setDetails] = useState(false);
+  const [focused, setFocused] = useState(false);
+  const amountInput = useRef<HTMLInputElement>(null);
+  // Swapping grouped display for the raw value drops the selection; typing must replace, not append.
+  useLayoutEffect(() => { if (focused) amountInput.current?.select(); }, [focused]);
   const current = findItem(sheet, item.id);
   const placementChanged = !current || current.section_id !== section.id;
   const saveEdit = (build: Job['build'], done: Job['done']) => {
@@ -248,11 +330,18 @@ function ItemRow({ item, section, sheet, api, available, locked, feedback, perfo
     catch (error) { setError(errorMessage(error)); return; }
     saveEdit(latest => api.command<'MonthlySheet'>(`/monthly-sheets/${sheet.month}/items/${item.id}`, { ...updateInput(findItem(latest, item.id)), amount_minor: minor }, { method: 'PUT', version: latest.version }), clean);
   };
-  return <div className="sheet-row" data-item={item.id}>
-    <button id={`item-${item.id}`} className="item-name" aria-expanded={details} onClick={() => setDetails(true)}>{item.name}{item.repeat_monthly && <span className="monthly-label">Monthly</span>}</button>
-    <div><label className="sr-only" htmlFor={`amount-${item.id}`}>{section.amount_label} for {item.name}</label><input id={`amount-${item.id}`} className="amount-field" inputMode="decimal" autoComplete="off" value={value} placeholder={item.usual_amount_minor != null && item.repeat_monthly ? `Usual ${moneyInput(item.usual_amount_minor, sheet.currency_exponent)}` : 'Not entered'} disabled={locked} aria-invalid={Boolean(error) || undefined} aria-describedby={error ? `error-${item.id}` : undefined} onChange={event => {
+  const saved = !current || item.amount_minor == null ? 'Not entered' : formatMoney(item.amount_minor, sheet.currency, sheet.currency_exponent);
+  const reviewEdit = edited.current && !locked && (placementChanged || item.amount_minor !== editedFrom.current);
+  const entered = (() => { try { return groupAmount(moneyInput(amount(value, sheet.currency_exponent), sheet.currency_exponent)); } catch { return value.trim(); } })();
+  const discard = () => { edited.current = false; markDirty(item.id, false); setValue(moneyInput(item.amount_minor, sheet.currency_exponent)); setError(''); requestAnimationFrame(() => document.getElementById(`item-${item.id}`)?.focus()); };
+  const closeDetails = () => { detailsDirty.current = false; setDetails(false); requestAnimationFrame(() => { if (document.activeElement === document.body) document.getElementById(`item-${item.id}`)?.focus(); }); };
+  return <div className={`sheet-row ${details ? 'is-open' : ''}`} data-item={item.id}>
+    <div className="item-cell"><button id={`item-${item.id}`} className="item-name" aria-expanded={details} title={details ? undefined : 'Edit details'} onClick={event => { if (!details) { openedByTouch.current = event.detail > 0 && Boolean(window.matchMedia?.('(pointer: coarse)').matches); setDetails(true); } else if (!detailsDirty.current) closeDetails(); }}><span className="item-label">{item.name}{item.repeat_monthly && <>{' '}<span className="monthly-label">Monthly</span></>}</span><ChevronDown /></button>
+      {item.note && !details && <span className="item-note">{item.note}</span>}</div>
+    <div className="amount-cell"><label className="sr-only" htmlFor={`amount-${item.id}`}>{section.amount_label} for {item.name}</label><input id={`amount-${item.id}`} ref={amountInput} className={`amount-field ${failed ? 'is-unconfirmed' : ''} ${reviewEdit ? 'is-review' : ''}`} inputMode="decimal" autoComplete="off" value={focused || edited.current ? value : groupAmount(value)} placeholder={item.usual_amount_minor != null && item.repeat_monthly ? `Usual ${moneyInput(item.usual_amount_minor, sheet.currency_exponent)}` : 'Add amount'} disabled={locked} aria-invalid={Boolean(error) || undefined} aria-describedby={error ? `error-${item.id}` : undefined} onChange={event => {
+      if (!edited.current) editedFrom.current = item.amount_minor;
       edited.current = true; markDirty(item.id, true); setValue(event.target.value); setError('');
-    }} onBlur={event => { if (!(event.relatedTarget instanceof HTMLElement && event.relatedTarget.dataset.discardAmount === item.id)) save(); }} onKeyDown={event => {
+    }} onFocus={() => setFocused(true)} onBlur={event => { setFocused(false); if (!(event.relatedTarget instanceof HTMLElement && event.relatedTarget.dataset.discardAmount === item.id)) save(); }} onKeyDown={event => {
       if (event.key === 'Escape') {
         event.preventDefault();
         const target = edited.current ? document.querySelector<HTMLElement>(`[data-discard-amount="${item.id}"]`) : document.getElementById(`item-${item.id}`);
@@ -263,17 +352,21 @@ function ItemRow({ item, section, sheet, api, available, locked, feedback, perfo
       const next = fields[fields.indexOf(event.currentTarget) + (event.shiftKey ? -1 : 1)];
       if (next) { event.preventDefault(); next.focus(); }
       else if (event.key === 'Enter') { event.preventDefault(); save(true); }
-    }} /></div>
-    {error && <div className="row-status error" id={`error-${item.id}`} role="alert">{error}</div>}
-    {feedback}
-    {placementChanged && <p className="row-status">{current ? `Moved to ${sheet.sections.find(section => section.id === current.section_id)?.name} in another tab.` : 'Skipped in another tab.'} Your unsaved edits remain here. Save to reapply or discard them.</p>}
-    {edited.current && !locked && <div className="row-status">Saved amount: {!current || item.amount_minor == null ? 'Not entered' : formatMoney(item.amount_minor, sheet.currency, sheet.currency_exponent)}<div><button onClick={() => save(true)} disabled={!available}>{current ? 'Save amount' : 'Restore and reapply amount'}</button><button data-discard-amount={item.id} onClick={() => { edited.current = false; markDirty(item.id, false); setValue(moneyInput(item.amount_minor, sheet.currency_exponent)); setError(''); requestAnimationFrame(() => document.getElementById(`item-${item.id}`)?.focus()); }}>Discard edit</button></div></div>}
-    {details && <ItemDetails item={item} sheet={sheet} api={api} perform={perform} saveEdit={saveEdit} disabled={locked || !available || edited.current} markDirty={markDirty} onClose={() => { setDetails(false); requestAnimationFrame(() => { if (document.activeElement === document.body) document.getElementById(`item-${item.id}`)?.focus(); }); }} clean={clean} />}
+    }} />
+      {edited.current && !locked && !reviewEdit && <div className="edit-actions"><button className={error ? undefined : 'confirm'} aria-label="Save amount" title="Save amount" onClick={() => save(true)} disabled={!available}><Check /></button><button data-discard-amount={item.id} aria-label="Discard edit" title={`Discard edit. Saved amount: ${saved}`} onClick={discard}><Close /></button></div>}
+    </div>
+    {error && <div className="row-status error field-error" id={`error-${item.id}`} role="alert">{error}</div>}
+    {feedback(edited.current ? `Totals still use ${item.amount_minor == null ? 'a blank amount' : formatMoney(item.amount_minor, sheet.currency, sheet.currency_exponent)}.` : undefined)}
+    {reviewEdit && <div className="row-status">{placementChanged ? <>{current ? `Moved to ${sheet.sections.find(section => section.id === current.section_id)?.name} in another tab.` : 'Skipped in another tab.'} Your unsaved edits remain here. Save to reapply or discard them. Latest saved amount: {saved}</> : <>Your entry {entered || 'blank'} · Latest saved {saved}</>}<div className="actions"><button onClick={() => save(true)} disabled={!available}>{!current ? 'Restore and reapply amount' : placementChanged ? 'Save amount' : entered ? `Keep my ${entered}` : 'Keep blank'}</button><button data-discard-amount={item.id} onClick={discard}>{placementChanged ? 'Discard edit' : item.amount_minor == null ? 'Use saved blank' : `Use saved ${groupAmount(moneyInput(item.amount_minor, sheet.currency_exponent))}`}</button></div></div>}
+    {placementChanged && !reviewEdit && <p className="row-status">{current ? `Moved to ${sheet.sections.find(section => section.id === current.section_id)?.name} in another tab.` : 'Skipped in another tab.'} Your unsaved edits remain here. Save to reapply or discard them.</p>}
+    {details && <ItemDetails item={item} sheet={sheet} api={api} perform={perform} saveEdit={saveEdit} disabled={locked || !available || edited.current} blockedByAmount={edited.current} focusName={!openedByTouch.current} markDirty={(key, value) => { detailsDirty.current = value; markDirty(key, value); }} onClose={closeDetails} clean={clean} notify={notify} />}
   </div>;
 }
-function ItemDetails({ item, sheet, api, perform, saveEdit, disabled, markDirty, onClose, clean }: {
-  item: Item; sheet: Sheet; api: ApiClient; perform: Perform; saveEdit(build: Job['build'], done: Job['done']): void; disabled: boolean; markDirty(key: string, value: boolean): void; onClose(): void; clean(sheet: Sheet): void;
+function ItemDetails({ item, sheet, api, perform, saveEdit, disabled, blockedByAmount, focusName, markDirty, onClose, clean, notify }: {
+  item: Item; sheet: Sheet; api: ApiClient; perform: Perform; saveEdit(build: Job['build'], done: Job['done']): void; disabled: boolean; blockedByAmount: boolean; focusName: boolean; markDirty(key: string, value: boolean): void; onClose(): void; clean(sheet: Sheet): void; notify(toast: Toast): void;
 }) {
+  const panel = useRef<HTMLDivElement>(null);
+  useEffect(() => { panel.current?.closest('.sheet-row')?.scrollIntoView?.({ block: 'nearest' }); }, []);
   const [name, setName] = useState(item.name);
   const [note, setNote] = useState(item.note);
   const [repeat, setRepeat] = useState(item.repeat_monthly);
@@ -284,7 +377,8 @@ function ItemDetails({ item, sheet, api, perform, saveEdit, disabled, markDirty,
   const changed = (field: keyof S['MonthlyItemUpdate']) => { changedFields.current.add(field); markDirty(dirtyKey, true); };
   const done = (result: Sheet) => { clean(result); markDirty(dirtyKey, false); onClose(); };
   const inputId = useId();
-  return <div className="item-details"><form onSubmit={event => {
+  const cancel = () => { markDirty(dirtyKey, false); onClose(); };
+  return <div className="item-details" ref={panel} onKeyDown={event => { if (event.key === 'Escape' && !changedFields.current.size && !disabled) { event.preventDefault(); cancel(); } }}><form onSubmit={event => {
     event.preventDefault(); setError('');
     try {
       const usualMinor = repeat && usual.trim() ? amount(usual, sheet.currency_exponent) : null;
@@ -296,22 +390,25 @@ function ItemDetails({ item, sheet, api, perform, saveEdit, disabled, markDirty,
       }, done);
     } catch (error) { setError(errorMessage(error)); }
   }}><fieldset disabled={disabled}>
-    <div className="field"><label htmlFor={`${inputId}-name`}>Name</label><input id={`${inputId}-name`} autoFocus value={name} required onChange={event => { setName(event.target.value); changed('name'); }} /></div>
-    <div className="field"><label htmlFor={`${inputId}-note`}>Notes</label><textarea id={`${inputId}-note`} rows={2} value={note} onChange={event => { setNote(event.target.value); changed('note'); }} /></div>
+    {blockedByAmount && <p className="quiet switch-hint">Save or discard the amount edit to change these details.</p>}
+    <div className="field"><label htmlFor={`${inputId}-name`}>Name</label><input id={`${inputId}-name`} autoFocus={focusName} value={name} required onChange={event => { setName(event.target.value); changed('name'); }} /></div>
+    <div className="field"><label htmlFor={`${inputId}-note`}>Notes</label><textarea id={`${inputId}-note`} rows={1} value={note} onChange={event => { setNote(event.target.value); changed('note'); }} /></div>
     <div className="check-field"><input id={`${inputId}-repeat`} type="checkbox" role="switch" checked={repeat} onChange={event => { setRepeat(event.target.checked); changed('repeat_monthly'); changed('usual_amount_minor'); }} /><label htmlFor={`${inputId}-repeat`}>Repeat monthly</label></div>
-    {repeat && <><p className="quiet">Appears each month. Enter the amount when you know it.</p><div className="field"><label htmlFor={`${inputId}-usual`}>Usual amount</label><input id={`${inputId}-usual`} inputMode="decimal" value={usual} onChange={event => { setUsual(event.target.value); changed('usual_amount_minor'); }} /><small>Optional suggestion. Existing monthly amounts stay as entered.</small></div></>}
+    {!repeat && item.repeat_monthly && <p className="quiet switch-hint">Won't appear from next month, once saved.</p>}
+    {repeat && <><p className="quiet switch-hint">Appears each month. Enter the amount when you know it.</p><div className="field"><label htmlFor={`${inputId}-usual`}>Usual amount</label><input id={`${inputId}-usual`} className="amount-input" inputMode="decimal" value={usual} onChange={event => { setUsual(event.target.value); changed('usual_amount_minor'); }} /><small>Optional suggestion. Existing monthly amounts stay as entered.</small></div></>}
     {error && <p className="error" role="alert">{error}</p>}
-    <div className="actions"><button className="primary">{findItem(sheet, item.id) ? 'Save details' : 'Restore and reapply details'}</button><button type="button" onClick={() => { markDirty(dirtyKey, false); onClose(); }}>Cancel</button></div>
-    <div className="actions"><button type="button" disabled={!findItem(sheet, item.id) || item.amount_minor == null} onClick={() => void perform(item.id, latest => api.command<'MonthlySheet'>(`/monthly-sheets/${sheet.month}/items/${item.id}`, { ...updateInput(findItem(latest, item.id)), amount_minor: null }, { method: 'PUT', version: latest.version }), done)}>Clear amount</button>
-      <button type="button" disabled={!findItem(sheet, item.id)} onClick={() => void perform(item.id, latest => api.command<'MonthlySheet'>(`/monthly-sheets/${sheet.month}/items/${item.id}/remove`, {}, { version: latest.version }), done)}>Skip this month</button>
-      {item.repeat_monthly && <button type="button" disabled={!findItem(sheet, item.id)} onClick={() => void perform(item.id, latest => api.command<'MonthlySheet'>(`/monthly-sheets/${sheet.month}/items/${item.id}`, { ...updateInput(findItem(latest, item.id)), repeat_monthly: false, usual_amount_minor: null }, { method: 'PUT', version: latest.version }), done)}>Stop repeating</button>}
-    </div><p className="quiet">Skipping removes this month's row. History stays saved. Stop repeating ends future automatic rows.</p>
+    <div className="actions details-actions"><button className="primary" disabled={Boolean(findItem(sheet, item.id)) && !changedFields.current.size}>{findItem(sheet, item.id) ? 'Save details' : 'Restore and reapply details'}</button><button type="button" onClick={cancel}>Cancel</button></div>
+    <p className="details-more-title">This month</p><div className="details-more"><button type="button" disabled={!findItem(sheet, item.id) || item.amount_minor == null} onClick={() => void perform(item.id, latest => api.command<'MonthlySheet'>(`/monthly-sheets/${sheet.month}/items/${item.id}`, { ...updateInput(findItem(latest, item.id)), amount_minor: null }, { method: 'PUT', version: latest.version }), result => { done(result); notify({ text: `Cleared ${item.name}.`, undo: 'Undo clear' }); })}>Clear amount</button><span className="quiet">Leaves this month's amount blank.</span>
+      <button type="button" disabled={!findItem(sheet, item.id)} onClick={() => void perform(item.id, latest => api.command<'MonthlySheet'>(`/monthly-sheets/${sheet.month}/items/${item.id}/remove`, {}, { version: latest.version }), result => { done(result); notify({ text: `Skipped ${item.name} this month.`, undo: 'Undo skip' }); })}>Skip this month</button><span className="quiet">Removes it from this month only. History stays saved.</span>
+    </div>
   </fieldset></form></div>;
 }
 function AddItem({ section, sheet, api, signedIn, perform, locked, feedback, close, focusItem }: {
   section: Section; sheet: Sheet; api: ApiClient; signedIn: boolean; perform: Perform; locked: boolean; feedback: React.ReactNode; close(): void; focusItem(id: string): void;
 }) {
   const id = useId();
+  const formElement = useRef<HTMLFormElement>(null);
+  useEffect(() => { formElement.current?.scrollIntoView?.({ block: 'nearest' }); }, []);
   const [name, setName] = useState('');
   const [value, setValue] = useState('');
   const [repeat, setRepeat] = useState(false);
@@ -323,13 +420,14 @@ function AddItem({ section, sheet, api, signedIn, perform, locked, feedback, clo
   const [active, setActive] = useState(-1);
   const [error, setError] = useState('');
   const suggestions = useQuery({ queryKey: ['monthly-suggestions', sheet.month, section.id, name, sheet.version], queryFn: () => api.get<'MonthlyItemSuggestions'>(`/monthly-item-suggestions?month=${sheet.month}&section_id=${section.id}&q=${encodeURIComponent(name)}`), enabled: signedIn && showSuggestions && !selected && !locked });
-  const matches = showSuggestions && !selected ? suggestions.data?.items ?? [] : [];
+  // Before anything is typed, offer only names that can actually be added again.
+  const matches = showSuggestions && !selected ? (suggestions.data?.items ?? []).filter(item => name.trim() || !item.current_month_item_id) : [];
   const select = (item: S['MonthlyItemSuggestion']) => {
     if (item.current_month_item_id) { close(); focusItem(item.current_month_item_id); return; }
     setSelected(item); setName(item.name); setRepeat(item.repeat_monthly); setSuggestUsual(item.usual_amount_minor != null); setPreferenceEdited(false); setUsualEdited(false); setActive(-1); setShowSuggestions(false);
     document.getElementById(`${id}-amount`)?.focus();
   };
-  return <form className="inline-form" aria-label={`Add item to ${section.name}`} onSubmit={event => {
+  return <form className="inline-form" ref={formElement} aria-label={`Add item to ${section.name}`} onSubmit={event => {
     event.preventDefault(); setError('');
     const existing = sheet.sections.filter(candidate => candidate.direction === section.direction).flatMap(candidate => candidate.items).find(item => normalize(item.name) === normalize(name));
     if (existing) { close(); focusItem(existing.id); return; }
@@ -347,7 +445,7 @@ function AddItem({ section, sheet, api, signedIn, perform, locked, feedback, clo
       });
     } catch (error) { setError(errorMessage(error)); }
   }}><h4>Add item to {section.name}</h4><fieldset disabled={locked}>
-    <div className="field"><label htmlFor={`${id}-name`}>Name</label><input id={`${id}-name`} autoFocus required role="combobox" aria-autocomplete="list" aria-expanded={matches.length > 0} aria-controls={`${id}-suggestions`} aria-activedescendant={active >= 0 && matches[active] ? `${id}-option-${active}` : undefined} autoComplete="off" value={name} onChange={event => {
+    <div className="inline-form-fields"><div className="field"><label htmlFor={`${id}-name`}>Name</label><input id={`${id}-name`} autoFocus required role="combobox" aria-autocomplete="list" aria-expanded={matches.length > 0} aria-controls={`${id}-suggestions`} aria-activedescendant={active >= 0 && matches[active] ? `${id}-option-${active}` : undefined} autoComplete="off" value={name} onFocus={() => setShowSuggestions(true)} onBlur={() => { setShowSuggestions(false); setActive(-1); }} onChange={event => {
       setName(event.target.value); setShowSuggestions(true); setActive(-1);
       if (selected) { setSelected(undefined); setRepeat(false); setSuggestUsual(false); setPreferenceEdited(false); setUsualEdited(false); }
     }} onKeyDown={event => {
@@ -356,36 +454,47 @@ function AddItem({ section, sheet, api, signedIn, perform, locked, feedback, clo
       if (event.key === 'ArrowUp' && matches.length) { event.preventDefault(); setActive(index => (index + matches.length - 1) % matches.length); }
       if (event.key === 'Enter' && active >= 0 && matches[active]) { event.preventDefault(); select(matches[active]); }
     }} />
-      {matches.length > 0 && <ul className="suggestions" role="listbox" id={`${id}-suggestions`} aria-label="Saved items">{matches.map((item, index) => <li key={item.id} role="option" id={`${id}-option-${index}`} aria-selected={active === index} onPointerDown={event => event.preventDefault()} onClick={() => select(item)}>{item.name}<small>{item.section_name}{item.current_month_item_id ? ' · Already in this month' : item.repeat_monthly ? ' · Monthly' : ''}</small></li>)}</ul>}
-      {matches.length > 0 && <button className="quiet-button" type="button" onClick={() => setShowSuggestions(false)}>Dismiss suggestions</button>}
+      {matches.length > 0 && <div className="suggestions-pop"><ul className="suggestions" role="listbox" id={`${id}-suggestions`} aria-label="Saved items">{matches.map((item, index) => <li key={item.id} role="option" id={`${id}-option-${index}`} aria-selected={active === index} onPointerDown={event => event.preventDefault()} onClick={() => select(item)}>{item.name}<small>{item.section_name}{item.current_month_item_id ? ' · Already in this month' : item.repeat_monthly ? ' · Monthly' : ''}</small></li>)}</ul>
+      <button className="quiet-button dismiss-suggestions" type="button" onClick={() => setShowSuggestions(false)}>Dismiss suggestions</button></div>}
       {suggestions.isError && <small>Saved names could not be loaded. You can still type a name.</small>}
     </div>
-    <div className="field"><label htmlFor={`${id}-amount`}>{section.amount_label}</label><input id={`${id}-amount`} inputMode="decimal" required value={value} onChange={event => setValue(event.target.value)} />{section.amount_label === 'Bill amount' && <small>The bill amount accounted for this month.</small>}</div>
+    <div className="field"><label htmlFor={`${id}-amount`}>{section.amount_label}</label><input id={`${id}-amount`} className="amount-input" inputMode="decimal" required value={value} onChange={event => setValue(event.target.value)} /></div></div>
     <div className="check-field"><input id={`${id}-repeat`} role="switch" type="checkbox" checked={repeat} onChange={event => { setRepeat(event.target.checked); setPreferenceEdited(true); }} /><label htmlFor={`${id}-repeat`}>Repeat monthly</label></div>
-    {repeat && <><p className="quiet">Appears each month. Enter the amount when you know it.</p><div className="check-field"><input id={`${id}-usual`} type="checkbox" checked={suggestUsual} onChange={event => { setSuggestUsual(event.target.checked); setPreferenceEdited(true); setUsualEdited(true); }} /><label htmlFor={`${id}-usual`}>Suggest this amount each month</label></div>{selected?.usual_amount_minor != null && suggestUsual && !usualEdited && <small>Saved usual amount: {formatMoney(selected.usual_amount_minor, sheet.currency, sheet.currency_exponent)}</small>}</>}
+    {repeat && <><p className="quiet switch-hint">Appears each month. Enter the amount when you know it.</p><div className="check-field"><input id={`${id}-usual`} type="checkbox" role="switch" checked={suggestUsual} onChange={event => { setSuggestUsual(event.target.checked); setPreferenceEdited(true); setUsualEdited(true); }} /><label htmlFor={`${id}-usual`}>Make this the usual amount</label></div>{selected?.usual_amount_minor != null && suggestUsual && !usualEdited && <small>Saved usual amount: {formatMoney(selected.usual_amount_minor, sheet.currency, sheet.currency_exponent)}</small>}</>}
     {error && <p className="error" role="alert">{error}</p>}
     <div className="actions"><button className="primary">Save item</button><button type="button" onClick={close}>Cancel</button></div>
   </fieldset>{feedback}</form>;
 }
 
-function MonthPicker({ value, disabled, onChange }: { value: string; disabled: boolean; onChange(value: string): void }) {
+function MonthPicker({ month, current, disabled, reason, onChange }: { month: string; current: string; disabled: boolean; reason?: string; onChange(value: string): void }) {
   const [open, setOpen] = useState(false);
+  const year = Number(month.slice(0, 4)); const selected = Number(month.slice(5));
+  const [viewYear, setViewYear] = useState(year);
   const root = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
-  const names = Array.from({ length: 12 }, (_, i) => new Intl.DateTimeFormat('en', { month: 'long' }).format(new Date(2020, i, 1)));
+  const pick = (nextYear: number, nextMonth: number) => { onChange(`${String(nextYear).padStart(4, '0')}-${String(nextMonth).padStart(2, '0')}`); setOpen(false); trigger.current?.focus(); };
+  const step = (delta: number) => { const index = year * 12 + selected - 1 + delta; onChange(`${Math.floor(index / 12)}-${String(index % 12 + 1).padStart(2, '0')}`); };
   useEffect(() => {
     const outside = (event: PointerEvent) => { if (!root.current?.contains(event.target as Node)) setOpen(false); };
     document.addEventListener('pointerdown', outside);
     return () => document.removeEventListener('pointerdown', outside);
   }, []);
-  useEffect(() => { if (open) root.current?.querySelector<HTMLButtonElement>('[aria-pressed="true"]')?.focus(); }, [open]);
-  return <div className="month-picker" ref={root} onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false); }} onKeyDown={event => {
-    if (event.key === 'Escape') { setOpen(false); trigger.current?.focus(); }
-    if (open && ['ArrowRight', 'ArrowLeft', 'ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
-      event.preventDefault(); const buttons = Array.from(root.current!.querySelectorAll<HTMLButtonElement>('.month-popup button')); const index = buttons.indexOf(document.activeElement as HTMLButtonElement);
-      const next = event.key === 'Home' ? 0 : event.key === 'End' ? 11 : (index + (event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : event.key === 'ArrowDown' ? 3 : -3) + 12) % 12; buttons[next].focus();
-    }
-  }}><button id="month" ref={trigger} disabled={disabled} aria-label="Month" aria-expanded={open} aria-controls="month-popup" onClick={() => setOpen(!open)}>{names[Number(value) - 1]} <svg aria-hidden="true" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor"><path d="m4 6 4 4 4-4" /></svg></button>
-    {open && <div id="month-popup" className="month-popup" role="group" aria-label="Choose month">{names.map((name, i) => <button key={name} disabled={disabled} aria-pressed={Number(value) === i + 1} onClick={() => { onChange(String(i + 1).padStart(2, '0')); setOpen(false); trigger.current?.focus(); }}>{name}</button>)}</div>}
+  useEffect(() => { if (open) { setViewYear(year); root.current?.querySelector<HTMLButtonElement>('[aria-pressed="true"]')?.focus(); } }, [open]);
+  return <div className="month-switcher" role="group" aria-label="Reporting month" title={reason}>
+    <button className="icon-button" aria-label="Previous month" title="Previous month" disabled={disabled || month <= '1900-01'} onClick={() => step(-1)}><ChevronLeft /></button>
+    <div className="month-picker" ref={root} onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false); }} onKeyDown={event => {
+      if (event.key === 'Escape') { setOpen(false); trigger.current?.focus(); }
+      if (open && ['ArrowRight', 'ArrowLeft', 'ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
+        event.preventDefault(); const buttons = Array.from(root.current!.querySelectorAll<HTMLButtonElement>('.month-grid button')); const index = buttons.indexOf(document.activeElement as HTMLButtonElement);
+        const next = event.key === 'Home' ? 0 : event.key === 'End' ? 11 : (index + (event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : event.key === 'ArrowDown' ? 3 : -3) + 12) % 12; buttons[next].focus();
+      }
+    }}><button id="month" ref={trigger} disabled={disabled} aria-label={`Month: ${formatMonth(month)}`} aria-expanded={open} aria-controls="month-popup" onClick={() => setOpen(!open)}>{formatMonth(month)}<ChevronDown /></button>
+      {open && <div id="month-popup" className="popover month-popup">
+        <div className="year-stepper"><button className="icon-button" aria-label="Previous year" disabled={viewYear <= 1900} onClick={() => setViewYear(viewYear - 1)}><ChevronLeft /></button><span aria-live="polite">{viewYear}</span><button className="icon-button" aria-label="Next year" disabled={viewYear >= 9999} onClick={() => setViewYear(viewYear + 1)}><ChevronRight /></button></div>
+        <div className="month-grid" role="group" aria-label="Choose month">{monthNames.map((name, i) => <button key={name} aria-label={name} disabled={disabled} aria-pressed={viewYear === year && selected === i + 1} className={current === `${viewYear}-${String(i + 1).padStart(2, '0')}` ? 'is-current' : undefined} onClick={() => pick(viewYear, i + 1)}>{name.slice(0, 3)}</button>)}</div>
+        {month !== current && <button className="quiet-button month-today" onClick={() => pick(Number(current.slice(0, 4)), Number(current.slice(5)))}>Go to this month</button>}
+      </div>}
+    </div>
+    <button className="icon-button" aria-label="Next month" title="Next month" disabled={disabled || month >= '9999-12'} onClick={() => step(1)}><ChevronRight /></button>
   </div>;
 }

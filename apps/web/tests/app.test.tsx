@@ -42,26 +42,27 @@ it('keeps month controls disabled until the latest load finishes', async () => {
   render(<StrictMode><QueryClientProvider client={new QueryClient()}><MonthlySheet api={api} signedIn onDirty={() => {}} onLogout={() => {}} /></QueryClientProvider></StrictMode>);
   await waitFor(() => expect(settingsReads).toBe(2));
   await act(async () => {}); // Settle the earlier response while the latest stays blocked.
-  const year = screen.getByLabelText('Year', { exact: true });
-  expect(year).toHaveProperty('disabled', true);
+  const next = screen.getByRole('button', { name: 'Next month' });
+  expect(next).toHaveProperty('disabled', true);
   await act(async () => { releaseOld(); });
   await screen.findByRole('heading', { name: 'Monthly remainder' });
-  const nextYear = String(Number(opened[0].slice(0, 4)) + 1);
-  const nextMonth = `${nextYear}${opened[0].slice(4)}`;
-  fireEvent.change(year, { target: { value: nextYear } }); fireEvent.blur(year);
+  const index = Number(opened[0].slice(0, 4)) * 12 + Number(opened[0].slice(5));
+  const nextMonth = `${Math.floor(index / 12)}-${String(index % 12 + 1).padStart(2, '0')}`;
+  fireEvent.click(next);
   await waitFor(() => expect(settingsReads).toBe(3));
-  expect(screen.getByLabelText('Year', { exact: true })).toHaveProperty('disabled', true);
+  expect(screen.getByRole('button', { name: 'Next month' })).toHaveProperty('disabled', true);
   await act(async () => { releaseNew(); });
   expect(opened).toContain(nextMonth);
 });
 it('preserves add values and blocks month change after an uncertain write', async () => {
   vi.stubGlobal('fetch', transport()); mount(); await signIn(); fireEvent.click(screen.getByRole('button', { name: 'Add item to Income' }));
   fireEvent.change(screen.getByRole('combobox', { name: 'Name' }), { target: { value: 'Salary' } }); fireEvent.change(screen.getByLabelText('Amount', { exact: true }), { target: { value: '6400' } }); fireEvent.click(screen.getByRole('button', { name: 'Save item' }));
-  await screen.findByRole('button', { name: 'Retry same action' }); expect(screen.getByLabelText('Amount', { exact: true })).toHaveProperty('value', '6400'); expect(screen.getByLabelText('Month', { exact: true })).toHaveProperty('disabled', true); expect(screen.getByLabelText('Year', { exact: true })).toHaveProperty('disabled', true); expect(screen.getByRole('button', { name: 'Sign out' })).toHaveProperty('disabled', true); expect(screen.queryByRole('navigation')).toBeNull();
+  await screen.findByRole('button', { name: 'Try again' }); expect(screen.getByLabelText('Amount', { exact: true })).toHaveProperty('value', '6400'); expect(screen.getByRole('button', { name: /^Month:/ })).toHaveProperty('disabled', true); expect(screen.getByRole('button', { name: 'Next month' })).toHaveProperty('disabled', true); fireEvent.click(screen.getByRole('button', { name: 'Menu' })); expect(screen.getByRole('button', { name: 'Sign out' })).toHaveProperty('disabled', true); expect(screen.queryByRole('navigation')).toBeNull();
 });
 it('clears private state on sign out and never persists the bearer', async () => {
   const storage = vi.spyOn(Storage.prototype, 'setItem'); vi.stubGlobal('fetch', transport()); mount(); await signIn();
   expect(screen.queryByRole('button', { name: 'Settings' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Menu' }));
   const header = screen.getByRole('banner'); expect(header.contains(screen.getByRole('button', { name: 'Export JSON' }))).toBe(true); expect(header.contains(screen.getByRole('button', { name: 'Sign out' }))).toBe(true);
   fireEvent.click(screen.getByRole('button', { name: 'Sign out' }));
   await screen.findByRole('button', { name: 'Sign in' }); expect(screen.queryByRole('heading', { name: 'Monthly remainder' })).toBeNull(); expect(storage).not.toHaveBeenCalled(); storage.mockRestore();
@@ -86,10 +87,10 @@ it('ignores a delayed StrictMode startup load after changing the reporting month
   render(<StrictMode><QueryClientProvider client={new QueryClient()}><MonthlySheet api={api} signedIn onDirty={() => {}} onLogout={() => {}} /></QueryClientProvider></StrictMode>);
   try {
     await screen.findByRole('heading', { name: 'Monthly remainder' }); changingMonth = true;
-    fireEvent.click(screen.getByRole('button', { name: 'Month' })); fireEvent.click(screen.getByRole('button', { name: 'October' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Month:/ })); fireEvent.click(screen.getByRole('button', { name: 'October' }));
     await current;
     await act(async () => { releasePrevious(); });
     await act(async () => { releaseCurrent(); });
-    await screen.findByText('SGD 100.00');
+    await waitFor(() => expect(screen.getByRole('region', { name: 'Monthly summary' }).textContent).toContain('SGD 100.00'));
   } finally { releasePrevious(); releaseCurrent(); }
 });
