@@ -50,7 +50,8 @@ test('recurring names start blank, usual amounts respect edits and zero, skip di
   await page.getByRole('button', { name: 'Skip this month', exact: true }).click();
   await selectMonth(page, '2026-12'); await expect(card).toHaveValue('');
   await page.getByRole('button', { name: 'House savings Monthly', exact: true }).click();
-  await page.getByRole('button', { name: 'Stop repeating', exact: true }).click();
+  await page.getByRole('switch', { name: 'Repeat monthly' }).uncheck();
+  await page.getByRole('button', { name: 'Save details', exact: true }).click();
   await expect(page.getByRole('button', { name: /^Month:/ })).toBeEnabled();
   await selectMonth(page, '2027-01'); await expect(savings).toHaveCount(0); await expect(card).toBeVisible();
   const october = await backend.get<'MonthlySheet'>(`/monthly-sheets/${month}`);

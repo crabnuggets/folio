@@ -1,9 +1,9 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { ApiClient, errorMessage, type S } from './lib/api';
 import { Attach, Close, Send, Sliders } from './components/Brand';
-import { formatMonth, moneyInput, parseMoney } from './lib/money';
+import { formatMonth, groupAmount, moneyInput, parseMoney } from './lib/money';
 
-type Proposal = { key: string; name: string; section_id: string; amount: string; note: string; repeat: boolean };
+type Proposal = { key: string; name: string; section_id: string; amount: string; note: string; repeat: boolean; editing: boolean };
 type Attachment = NonNullable<S['ChatCaptureInput']['attachment']>;
 type Props = {
   api: ApiClient; signedIn: boolean; month: string; sheet?: S['MonthlySheet']; available: boolean; unavailable: string; saving: boolean;
@@ -29,6 +29,7 @@ export function TransactionChat({ api, signedIn, month, sheet, available, unavai
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [saved, setSaved] = useState(0);
   const [adding, setAdding] = useState(false);
+  const [composing, setComposing] = useState(false);
   useEffect(() => { setSaved(0); setMessage(''); setError(''); }, [month]);
   const fileInput = useRef<HTMLInputElement>(null);
   const root = useRef<HTMLElement>(null);
@@ -101,11 +102,16 @@ export function TransactionChat({ api, signedIn, month, sheet, available, unavai
       const result = await api.command<'ChatCaptureResponse', S['ChatCaptureInput']>(`/monthly-sheets/${month}/capture`, { text, model, ...(attachment ? { attachment } : {}) }).run();
       if (!active.current) return;
       setMessage(result.message);
-      setProposals(result.items.map(item => ({ key: `chat-${crypto.randomUUID()}`, name: item.name, section_id: item.section_id, amount: moneyInput(item.amount_minor, sheet.currency_exponent), note: item.note, repeat: false })));
+      setProposals(result.items.map(item => ({ key: `chat-${crypto.randomUUID()}`, name: item.name, section_id: item.section_id, amount: moneyInput(item.amount_minor, sheet.currency_exponent), note: item.note, repeat: false, editing: false })));
       if (result.items.length > 0) { setText(''); setAttachment(undefined); }
     } catch (error) { if (active.current) setError(`No items were added. ${errorMessage(error)}`); }
     finally { setProcessing(false); }
   };
+  useEffect(() => {
+    const outside = (event: PointerEvent) => { if (!root.current?.contains(event.target as Node)) setComposing(false); };
+    document.addEventListener('pointerdown', outside);
+    return () => document.removeEventListener('pointerdown', outside);
+  }, []);
   // Keep the sheet reachable: an idle panel steps aside, pending suggestions stay.
   useEffect(() => {
     if (!expanded || proposals.length || busy || connecting) return;
@@ -130,10 +136,11 @@ export function TransactionChat({ api, signedIn, month, sheet, available, unavai
   const ready = available && !saving && Boolean(connection?.sharing && model);
   const status = connection?.connected ? connection.sharing ? `Connected${connection.email ? ` as ${connection.email}` : ''}` : 'ChatGPT plan access needed' : 'ChatGPT is not connected';
   const label = formatMonth(month);
+  const reviewing = proposals.length > 0 || processing || Boolean(message) || saved > 0;
   return <aside className="transaction-chat" aria-label="Add items with ChatGPT" ref={root}>
     {expanded && proposals.length > 0 && <div className="chat-scrim" aria-hidden="true" />}
     {expanded && <section id={`${id}-panel`} className="chat-panel" aria-labelledby={`${id}-title`}>
-      <div className="chat-panel-heading"><div><h2 id={`${id}-title`}>Add to {label} with ChatGPT</h2>{!proposals.length && <p className="quiet">Describe items or attach a bill. Nothing is added until you review it.</p>}</div><button type="button" className="icon-button" aria-label="Collapse chat" onClick={() => setExpanded(false)}><Close /></button></div>
+      <div className="chat-panel-heading"><div><h2 id={`${id}-title`}>{reviewing ? `Add to ${label}` : connection?.sharing ? 'ChatGPT settings' : 'Add items with ChatGPT'}</h2>{!reviewing && !connection?.sharing && <p className="quiet">Describe items or attach a bill. Nothing is added until you review it.</p>}</div><button type="button" className="icon-button" aria-label="Collapse chat" onClick={() => setExpanded(false)}><Close /></button></div>
       {!proposals.length && <><div className="chat-connection">
         <span className={`chat-connection-status ${connection?.sharing ? 'is-connected' : ''}`}>{status}</span>
         {connection?.connected ? <button type="button" className="quiet-button" disabled={connecting || busy || saving} onClick={async () => {
@@ -150,7 +157,7 @@ export function TransactionChat({ api, signedIn, month, sheet, available, unavai
       {processing && <p className="notice" role="status">Reading your input with ChatGPT. Nothing has been added yet.</p>}
       {message && <p className="chat-response" role="status">{message}</p>}
       {saved > 0 && <p className="quiet" role="status">{saved} {saved === 1 ? 'item added' : 'items added'} to {label}.</p>}
-      {proposals.length > 0 && <div className="chat-proposals"><h3>Review suggested items</h3><p className="quiet">Correct anything that looks wrong. A blank amount stays blank.</p>{proposals.map((item, index) => {
+      {proposals.length > 0 && <div className="chat-proposals"><h3>Review suggested items</h3><p className="quiet">Edit anything that looks wrong. A blank amount stays blank.</p>{proposals.map((item, index) => {
         const section = sheet?.sections.find(section => section.id === item.section_id);
         const duplicate = isDuplicate(item);
         const itemLocked = locked(item.key);
@@ -160,13 +167,14 @@ export function TransactionChat({ api, signedIn, month, sheet, available, unavai
           try { await addProposal(item); }
           catch (error) { setError(errorMessage(error)); }
         }}><fieldset disabled={itemLocked || busy}>
-          <div className="chat-proposal-fields"><div className="field"><label htmlFor={`${item.key}-name`}>Name</label><input id={`${item.key}-name`} value={item.name} required maxLength={120} onChange={event => edit(item.key, { name: event.target.value })} /></div>
-          <div className="field"><label htmlFor={`${item.key}-amount`}>{section?.amount_label === 'Bill amount' ? 'Bill amount' : 'Amount'}</label><input id={`${item.key}-amount`} inputMode="decimal" placeholder="Leave blank" value={item.amount} onChange={event => edit(item.key, { amount: event.target.value })} /></div></div>
-          <div className="field"><label htmlFor={`${item.key}-section`}>Section</label><select id={`${item.key}-section`} value={item.section_id} required onChange={event => edit(item.key, { section_id: event.target.value })}>{(['in', 'out'] as const).map(direction => <optgroup key={direction} label={`Money ${direction}`}>{sheet?.sections.filter(section => section.direction === direction).map(section => <option key={section.id} value={section.id}>{section.name}</option>)}</optgroup>)}</select></div>
+          {!item.editing && !duplicate && <div className="chat-proposal-summary"><div><strong>{item.name}</strong><small>{section?.name}{item.repeat ? ' · Monthly' : ''}{item.note ? ` · ${item.note}` : ''}</small></div><span className="money">{item.amount.trim() ? groupAmount(item.amount.trim()) : 'Blank'}</span></div>}
+          {(item.editing || duplicate) && <><div className="chat-proposal-fields"><div className="field"><label htmlFor={`${item.key}-name`}>Name</label><input id={`${item.key}-name`} value={item.name} required maxLength={120} onChange={event => edit(item.key, { name: event.target.value })} /></div>
+          <div className="field"><label htmlFor={`${item.key}-amount`}>{section?.amount_label === 'Bill amount' ? 'Bill amount' : 'Amount'}</label><input id={`${item.key}-amount`} className="amount-input" inputMode="decimal" placeholder="Leave blank" value={item.amount} onChange={event => edit(item.key, { amount: event.target.value })} /></div></div>
+          <div className="chat-proposal-fields is-even"><div className="field"><label htmlFor={`${item.key}-section`}>Section</label><select id={`${item.key}-section`} value={item.section_id} required onChange={event => edit(item.key, { section_id: event.target.value })}>{(['in', 'out'] as const).map(direction => <optgroup key={direction} label={`Money ${direction}`}>{sheet?.sections.filter(section => section.direction === direction).map(section => <option key={section.id} value={section.id}>{section.name}</option>)}</optgroup>)}</select></div>
           <div className="field"><label htmlFor={`${item.key}-note`}>Notes</label><input id={`${item.key}-note`} value={item.note} maxLength={2000} onChange={event => edit(item.key, { note: event.target.value })} /></div>
-          <div className="check-field"><input id={`${item.key}-repeat`} type="checkbox" role="switch" checked={item.repeat} onChange={event => edit(item.key, { repeat: event.target.checked })} /><label htmlFor={`${item.key}-repeat`}>Repeat monthly</label></div>
+          </div><div className="check-field"><input id={`${item.key}-repeat`} type="checkbox" role="switch" checked={item.repeat} onChange={event => edit(item.key, { repeat: event.target.checked })} /><label htmlFor={`${item.key}-repeat`}>Repeat monthly</label></div></>}
           {duplicate && <p className="notice">An item with this name already exists on this side of the sheet. Edit it in the sheet, or choose a different name here.</p>}
-          <div className="actions"><button type="submit" disabled={!ready || duplicate}>Add item<span className="sr-only"> to {label}</span></button><button type="button" className="quiet-button" onClick={() => setProposals(previous => previous.filter(value => value.key !== item.key))}>Discard<span className="sr-only"> suggestion</span></button></div>
+          <div className="actions"><button type="submit" className={proposals.length === 1 ? 'primary' : undefined} disabled={!ready || duplicate}>Add item<span className="sr-only"> to {label}</span></button>{!duplicate && <button type="button" className="quiet-button" onClick={() => edit(item.key, { editing: !item.editing })}>{item.editing ? 'Done' : 'Edit'}<span className="sr-only"> suggestion</span></button>}<button type="button" className="quiet-button" onClick={() => setProposals(previous => previous.filter(value => value.key !== item.key))}>Discard<span className="sr-only"> suggestion</span></button></div>
         </fieldset>{feedback(item.key)}</form>;
       })}</div>}
       {error && <p className="notice error" role="alert">{error}</p>}
@@ -183,11 +191,11 @@ export function TransactionChat({ api, signedIn, month, sheet, available, unavai
       {attachment && <div className="chat-attachment"><span>{attachment.name}</span><button type="button" className="quiet-button" aria-label={`Remove ${attachment.name}`} disabled={busy} onClick={() => setAttachment(undefined)}>Remove</button></div>}
       {/* Above the composer: revealing it on focus must not move Send under a pressed pointer. */}
       <p className="chat-disclosure" id={`${id}-hint`}>Sending shares your text and files with OpenAI.</p>
-      <form className="chat-composer" onSubmit={event => { event.preventDefault(); void send(); }}>
+      <form className={`chat-composer ${composing || text || attachment ? '' : 'is-idle'}`} onSubmit={event => { event.preventDefault(); void send(); }}>
         <input ref={fileInput} className="sr-only" tabIndex={-1} aria-label="Choose screenshot or document" type="file" accept="image/png,image/jpeg,image/webp,application/pdf,text/plain" disabled={busy || !signedIn || !available} onChange={event => { void chooseFile(event.target.files?.[0]); event.target.value = ''; }} />
         <button type="button" className="chat-upload" aria-label="ChatGPT settings" title="ChatGPT settings" aria-expanded={expanded} disabled={!signedIn || busy} onClick={() => setExpanded(!expanded)}><Sliders /></button>
         <button type="button" className="chat-upload" aria-label="Upload screenshot or document" disabled={busy || !signedIn || !available} onClick={() => fileInput.current?.click()} title="Attach a screenshot, receipt, bill or document"><Attach /></button>
-        <label className="sr-only" htmlFor={`${id}-text`}>Describe items to add</label><textarea id={`${id}-text`} rows={1} maxLength={12000} value={text} disabled={busy || !signedIn || !available} placeholder={available ? 'Add items by chat' : unavailable} aria-describedby={`${id}-hint`} onFocus={() => { if (!connection?.sharing) setExpanded(true); }} onChange={event => setText(event.target.value)} onKeyDown={event => { if (event.key === 'Escape') setExpanded(false); if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void send(); } }} />
+        <label className="sr-only" htmlFor={`${id}-text`}>Describe items to add</label><textarea id={`${id}-text`} rows={1} maxLength={12000} value={text} disabled={busy || !signedIn || !available} placeholder={available ? 'Add items by chat' : unavailable} aria-describedby={`${id}-hint`} onFocus={() => { setComposing(true); if (!connection?.sharing) setExpanded(true); }} onChange={event => setText(event.target.value)} onKeyDown={event => { if (event.key === 'Escape') setExpanded(false); if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void send(); } }} />
         {(text || attachment) && !busy && <button type="button" className="quiet-button chat-clear" onClick={() => { setText(''); setAttachment(undefined); setError(''); }}>Clear</button>}
         <button className="primary chat-send" aria-label={processing ? 'Reading your input' : 'Send'} title={ready ? 'Send' : 'Connect ChatGPT to send'} disabled={!ready || busy || (!text.trim() && !attachment)} type="submit"><Send /></button>
       </form></>}

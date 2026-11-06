@@ -43,7 +43,9 @@ async function propose() {
   fireEvent.change(screen.getByLabelText('Describe items to add'), { target: { value: 'Coffee 4.50' } });
   await waitFor(() => expect(screen.getByRole('button', { name: 'Send' })).toHaveProperty('disabled', false));
   fireEvent.click(screen.getByRole('button', { name: 'Send' }));
-  return screen.findByRole('form', { name: 'Suggested item 1' });
+  const draft = await screen.findByRole('form', { name: 'Suggested item 1' });
+  fireEvent.click(within(draft).getByRole('button', { name: /^Edit/ }));
+  return draft;
 }
 it('keeps chat available and requires reviewed confirmation before a sheet write', async () => {
   const transport = setup(); await signIn();

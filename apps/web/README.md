@@ -34,8 +34,8 @@ amounts. Shift+Tab moves to the previous amount; Tab exits normally at either
 boundary. Escape focuses Discard edit for an unsaved amount, or the item name
 otherwise. Enter on the item name opens and focuses details. Blank differs from
 an explicit zero. Details contain notes, rename, recurrence and usual amounts.
-Skip this month retains history and recurrence; Stop repeating ends future
-automatic rows. Clear and skip offer Undo.
+Skip this month retains history and recurrence; turning off Repeat monthly ends
+future automatic rows. Clear and skip offer Undo.
 
 The top bar moves between months with arrows or a month and year picker. Its menu
 holds Manage sections, Export JSON and Sign out. Old financial data stays separate
