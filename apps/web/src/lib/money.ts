@@ -8,7 +8,7 @@ export function parseMoney(input: string, exponent: number, positive = false): s
   // An explicit decimal point avoids ambiguous thousands/decimal separators.
   const match = /^(-?)(\d+)(?:\.(\d+))?$/.exec(value);
   if (!match || (match[3]?.length ?? 0) > exponent) {
-    throw new Error(`Enter an amount with up to ${exponent} decimal places, using a decimal point and no grouping separators.`);
+    throw new Error(exponent === 2 ? 'Enter a number like 1250.50, without commas.' : `Enter a number with up to ${exponent} decimal places, without commas.`);
   }
   const digits = match[2] + (match[3] ?? '').padEnd(exponent, '0');
   const amount = BigInt((match[1] || '') + digits);
@@ -34,3 +34,12 @@ export function moneyInput(value: string | null | undefined, exponent: number): 
   const digits = (negative ? value.slice(1) : value).padStart(exponent + 1, '0');
   return `${negative ? '-' : ''}${exponent ? `${digits.slice(0, -exponent)}.${digits.slice(-exponent)}` : digits}`;
 }
+
+/** Display grouping for a canonical decimal input value; editing stays ungrouped. */
+export function groupAmount(value: string): string {
+  const match = /^(-?)(\d+)(\.\d+)?$/.exec(value);
+  return match ? `${match[1]}${new Intl.NumberFormat('en-SG').format(BigInt(match[2]))}${match[3] ?? ''}` : value;
+}
+
+export const monthNames = Array.from({ length: 12 }, (_, i) => new Intl.DateTimeFormat('en', { month: 'long' }).format(new Date(2020, i, 1)));
+export const formatMonth = (month: string) => `${monthNames[Number(month.slice(5)) - 1]} ${month.slice(0, 4)}`;

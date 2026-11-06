@@ -4,6 +4,7 @@ import type { Session, GoTrueClient } from '@supabase/auth-js';
 import { ApiClient, errorMessage } from './lib/api';
 import { tokenExpiry } from './lib/session';
 import { authStorageKey, loadBrowserAuth, signInWithGoogle, type BrowserAuth } from './lib/googleAuth';
+import { Brand } from './components/Brand';
 import { Form, text } from './components/Form';
 import { MonthlySheet } from './MonthlySheet';
 
@@ -22,7 +23,7 @@ function GoogleCallback() {
       window.close();
     }
   }, []);
-  return <main className="login-page"><p>Return to your Folio tab to finish signing in.</p></main>;
+  return <main className="login-page"><div className="login-card"><Brand /><p className="login-lede">Return to your Folio tab to finish signing in.</p></div></main>;
 }
 
 function SignedInApp() {
@@ -98,16 +99,16 @@ function SignedInApp() {
   }, []);
   return <>
     {!signedIn && <main className="login-page"><div className="login-card">
-      <div className="brand"><span className="brand-mark" aria-hidden="true">f</span>Folio</div>
-      <p className="eyebrow">One month at a time</p><h1>Your monthly sheet.</h1>
-      <p>Enter what comes in and goes out. See what remains.</p>
+      <Brand />
+      <h1>Every month on one sheet.</h1>
+      <p className="login-lede">Enter what comes in and what goes out. See what remains.</p>
       {message && <p className="notice" role="status">{message}</p>}
       {client && <button className="google-sign-in" disabled={busy} onClick={() => {
         acceptSessions.current = true; client.startAutoRefresh();
         setBusy(true); setMessage('');
         void signInWithGoogle(client).catch(error => setMessage(errorMessage(error))).finally(() => setBusy(false));
       }}><GoogleMark />{busy ? 'Signing in...' : 'Sign in with Google'}</button>}
-      {config?.development_key === true && <>
+      {config?.development_key === true && <div className="dev-sign-in">
         <Form submit="Sign in" fields={[{ name: 'token', label: 'Access token', type: 'password', required: true, hint: 'Your development sign-in key stays in memory for this tab only.' }]} onSubmit={async values => {
           const token = text(values, 'token');
           if (!token || /\s/.test(token)) throw new Error('Enter a sign-in key without spaces.');
@@ -118,7 +119,7 @@ function SignedInApp() {
           } catch (error) { api.setToken(null); throw error; }
         }} />
         <p className="fine-print">Development sign-in. No key is saved to browser storage.</p>
-      </>}
+      </div>}
       {!config && !message && <p role="status">Loading sign-in...</p>}
       {config && !client && !config.development_key && <p role="status">Sign-in is not configured. Contact the application owner.</p>}
     </div></main>}

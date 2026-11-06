@@ -1,4 +1,4 @@
-import { test, expect, bearer, signIn, selectMonth, noHorizontalOverflow } from './fixtures';
+import { test, expect, bearer, signIn, selectMonth, openMenu, noHorizontalOverflow } from './fixtures';
 
 test('compiled app boots under Go CSP and preserves API/health routing', async ({ page, request }) => {
   const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
@@ -15,7 +15,7 @@ test('invalid bearer is recoverable; sign out clears financial UI and token pers
   await token.fill(bearer); await token.press('Enter'); await expect(page.getByRole('region', { name: 'Monthly summary' })).toBeVisible();
   expect(await page.evaluate(() => JSON.stringify({ local: { ...localStorage }, session: { ...sessionStorage } }))).not.toContain(bearer);
   await expect(page.getByRole('button', { name: 'Settings', exact: true })).toHaveCount(0);
-  await page.getByRole('banner').getByRole('button', { name: 'Sign out', exact: true }).click();
+  await openMenu(page); await page.getByRole('banner').getByRole('button', { name: 'Sign out', exact: true }).click();
   await expect(page.getByLabel('Access token', { exact: false })).toHaveValue(''); await expect(page.getByRole('region', { name: 'Monthly summary' })).toHaveCount(0);
   await page.reload(); await expect(page.getByLabel('Access token', { exact: false })).toBeVisible();
 });

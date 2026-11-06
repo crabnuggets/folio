@@ -50,8 +50,9 @@ it('keeps chat available and requires reviewed confirmation before a sheet write
   expect(screen.getByRole('complementary', { name: 'Add items with ChatGPT' })).toBeTruthy();
   const draft = await propose();
   expect(transport.mock.calls.filter(([path]) => String(path).endsWith('/items'))).toHaveLength(0);
+  fireEvent.click(screen.getByRole('button', { name: 'Menu' }));
   expect(screen.getByRole('button', { name: 'Sign out' })).toHaveProperty('disabled', true);
-  expect(screen.getByLabelText('Month', { exact: true })).toHaveProperty('disabled', true);
+  expect(screen.getByRole('button', { name: /^Month:/ })).toHaveProperty('disabled', true);
   fireEvent.change(within(draft).getByLabelText('Amount (SGD)'), { target: { value: '5.25' } });
   fireEvent.click(within(draft).getByRole('button', { name: /^Add item to/ }));
   await screen.findByRole('button', { name: 'Coffee' });
@@ -63,7 +64,7 @@ it('keeps chat available and requires reviewed confirmation before a sheet write
 it('retains the reviewed draft and immutable retry after an uncertain sheet write', async () => {
   const transport = setup({ lostWrite: true }); await signIn(); const draft = await propose();
   fireEvent.click(within(draft).getByRole('button', { name: /^Add item to/ }));
-  const retry = await screen.findByRole('button', { name: 'Retry same action' });
+  const retry = await screen.findByRole('button', { name: 'Try again' });
   expect(within(draft).getByLabelText('Item name').matches(':disabled')).toBe(true);
   expect(within(draft).getByRole('button', { name: 'Discard suggestion' }).matches(':disabled')).toBe(true);
   fireEvent.click(retry); await screen.findByRole('button', { name: 'Coffee' });
@@ -76,9 +77,8 @@ it('clears completed chat feedback when switching reporting months', async () =>
   setup(); await signIn(); const draft = await propose();
   fireEvent.click(within(draft).getByRole('button', { name: /^Add item to/ }));
   await screen.findByText(/1 item added to/);
-  await waitFor(() => expect(screen.getByLabelText('Year')).toHaveProperty('disabled', false));
-  const year = screen.getByLabelText('Year');
-  fireEvent.change(year, { target: { value: '2027' } }); fireEvent.blur(year);
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Next month' })).toHaveProperty('disabled', false));
+  fireEvent.click(screen.getByRole('button', { name: 'Next month' }));
   await waitFor(() => expect(screen.queryByText(/1 item added to/)).toBeNull());
   expect(screen.queryByText(capture.message)).toBeNull();
 });
@@ -112,7 +112,7 @@ it('preserves unsent text across an expired owner session', async () => {
 });
 it('explains unavailable connection setup and never sends to an unconnected provider', async () => {
   const transport = setup({ connected: false }); await signIn();
-  fireEvent.click(screen.getByRole('button', { name: 'Chat to add items' }));
+  fireEvent.focus(screen.getByLabelText('Describe items to add'));
   await screen.findByText('ChatGPT is not configured for this server.');
   expect(screen.getByRole('button', { name: 'Continue with ChatGPT' })).toHaveProperty('disabled', true);
   fireEvent.change(screen.getByLabelText('Describe items to add'), { target: { value: 'Coffee 4.50' } });
