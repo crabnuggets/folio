@@ -36,7 +36,7 @@ export function Form({ fields, defaults = {}, submit, onSubmit, children, disabl
           ...register(field.name, { required: field.required ? `${field.label} is required.` : false }),
         };
         return <div className={`field ${field.type === 'checkbox' ? 'check-field' : ''}`} key={field.name}>
-          <label htmlFor={controlId}>{field.label}{field.required ? <span aria-hidden="true"> *</span> : null}</label>
+          <label htmlFor={controlId}>{field.label}</label>
           {field.type === 'select' ? <select {...props}><option value="">Select…</option>{field.options?.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select>
             : field.type === 'textarea' ? <textarea {...props} rows={3} />
             : <input {...props} type={field.type === 'money' ? 'text' : field.type ?? 'text'} inputMode={field.type === 'money' ? 'decimal' : undefined} autoComplete={field.type === 'password' ? 'off' : undefined} spellCheck={field.type === 'password' ? false : undefined} />}

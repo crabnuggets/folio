@@ -53,7 +53,7 @@ it('keeps chat available and requires reviewed confirmation before a sheet write
   fireEvent.click(screen.getByRole('button', { name: 'Menu' }));
   expect(screen.getByRole('button', { name: 'Sign out' })).toHaveProperty('disabled', true);
   expect(screen.getByRole('button', { name: /^Month:/ })).toHaveProperty('disabled', true);
-  fireEvent.change(within(draft).getByLabelText('Amount (SGD)'), { target: { value: '5.25' } });
+  fireEvent.change(within(draft).getByLabelText('Amount'), { target: { value: '5.25' } });
   fireEvent.click(within(draft).getByRole('button', { name: /^Add item to/ }));
   await screen.findByRole('button', { name: 'Coffee' });
   const write = transport.mock.calls.find(([path]) => String(path).endsWith('/items'));
@@ -65,7 +65,7 @@ it('retains the reviewed draft and immutable retry after an uncertain sheet writ
   const transport = setup({ lostWrite: true }); await signIn(); const draft = await propose();
   fireEvent.click(within(draft).getByRole('button', { name: /^Add item to/ }));
   const retry = await screen.findByRole('button', { name: 'Try again' });
-  expect(within(draft).getByLabelText('Item name').matches(':disabled')).toBe(true);
+  expect(within(draft).getByLabelText('Name').matches(':disabled')).toBe(true);
   expect(within(draft).getByRole('button', { name: 'Discard suggestion' }).matches(':disabled')).toBe(true);
   fireEvent.click(retry); await screen.findByRole('button', { name: 'Coffee' });
   const writes = transport.mock.calls.filter(([path]) => String(path).endsWith('/items'));
@@ -84,10 +84,10 @@ it('clears completed chat feedback when switching reporting months', async () =>
 });
 it('rejects an overlong UTF-8 item name before creating a save command', async () => {
   const transport = setup(); await signIn(); const draft = await propose();
-  fireEvent.change(within(draft).getByLabelText('Item name'), { target: { value: '名'.repeat(41) } });
+  fireEvent.change(within(draft).getByLabelText('Name'), { target: { value: '名'.repeat(41) } });
   fireEvent.click(within(draft).getByRole('button', { name: /^Add item to/ }));
   await screen.findByText('Enter an item name of 1 to 120 bytes.');
-  expect(within(draft).getByLabelText('Item name').matches(':disabled')).toBe(false);
+  expect(within(draft).getByLabelText('Name').matches(':disabled')).toBe(false);
   expect(transport.mock.calls.filter(([path]) => String(path).endsWith('/items'))).toHaveLength(0);
 });
 it('holds an uploaded document locally until Send and lets the user remove it', async () => {

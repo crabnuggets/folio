@@ -22,7 +22,7 @@ test('clear and remove offer Undo, details preserve notes and rename, custom sec
   await expect(page.getByRole('button', { name: 'Redo', exact: true })).toBeDisabled();
   await page.getByRole('button', { name: 'Undo', exact: true }).click(); await expect(renamed).toHaveValue('120.25');
   await openMenu(page); await page.getByRole('button', { name: 'Manage sections', exact: true }).click();
-  await page.getByRole('textbox', { name: 'Section name' }).fill('Family'); await page.getByRole('combobox', { name: 'Side' }).selectOption('out');
+  await page.getByRole('textbox', { name: 'Section name' }).fill('Family'); await page.getByRole('combobox', { name: 'Money in or money out' }).selectOption('out');
   await page.getByRole('button', { name: 'Add section', exact: true }).click(); await expect(page.getByRole('textbox', { name: 'Family', exact: true })).toBeVisible();
   await expect(page.getByRole('textbox', { name: 'Section name' })).toHaveValue('');
   const cardsRename = page.getByRole('textbox', { name: 'Credit cards', exact: true }); await cardsRename.fill('Card bills');

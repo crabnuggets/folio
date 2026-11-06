@@ -21,7 +21,7 @@ test('chat proposals stay out of totals until reviewed and saved through Go', as
   const proposal = composer.getByRole('form', { name: 'Suggested item 1' });
   await expect(proposal).toBeVisible();
   expect((await backend.get<'MonthlySheet'>(`/monthly-sheets/${month}`)).money_in_minor).toBe('0');
-  await proposal.getByRole('textbox', { name: 'Amount (SGD)', exact: true }).fill('6400.25');
+  await proposal.getByRole('textbox', { name: 'Amount', exact: true }).fill('6400.25');
   await proposal.getByRole('button', { name: 'Add item to October 2026', exact: true }).click();
   await expect(proposal).toHaveCount(0);
   expect((await backend.get<'MonthlySheet'>(`/monthly-sheets/${month}`)).money_in_minor).toBe('640025');
