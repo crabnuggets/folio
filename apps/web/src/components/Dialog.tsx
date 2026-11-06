@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, type ReactNode } from 'react';
+import { Close } from './Brand';
 
 export function Dialog({ title, children, onClose, locked = false }: { title: string; children: ReactNode; onClose: () => void; locked?: boolean }) {
   const ref = useRef<HTMLDialogElement>(null);
@@ -10,7 +11,7 @@ export function Dialog({ title, children, onClose, locked = false }: { title: st
     return () => { dialog?.close(); if (previous?.isConnected) previous.focus(); };
   }, []);
   return <dialog ref={ref} aria-labelledby={id} onCancel={event => { event.preventDefault(); if (!locked) onClose(); }}>
-    <div className="dialog-header"><h2 id={id}>{title}</h2><button type="button" onClick={onClose} disabled={locked} aria-label="Close dialog">×</button></div>
+    <div className="dialog-header"><h2 id={id}>{title}</h2><button type="button" className="icon-button" onClick={onClose} disabled={locked} aria-label="Close dialog"><Close /></button></div>
     <div className="dialog-body">{children}</div>
   </dialog>;
 }
