@@ -7,7 +7,7 @@ export class ApiError extends Error {
   }
 }
 export class UncertainError extends Error {
-  constructor() { super("Couldn't confirm this change. Keep this tab open and try again."); }
+  constructor() { super("Couldn't confirm this save. Check your connection, then try again."); }
 }
 export const isUncertain = (error: unknown) => error instanceof UncertainError || (error instanceof ApiError && (error.status >= 500 || error.code === 'SESSION_ENDED'));
 
@@ -110,7 +110,7 @@ export class ApiClient {
 }
 
 export function errorMessage(error: unknown): string {
-  if (error instanceof ApiError && error.status === 412) return 'This changed somewhere else, such as another tab. Load and compare the latest saved values, then save again.';
+  if (error instanceof ApiError && error.status === 412) return 'Changed somewhere else, such as another tab. Compare before saving.';
   if (error instanceof ApiError && error.code === 'MONTH_CLOSED') return 'This affects a closed month. Reopen that month with a reason before changing it.';
   return error instanceof Error ? error.message : 'The request could not be completed.';
 }

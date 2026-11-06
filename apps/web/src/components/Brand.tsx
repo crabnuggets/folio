@@ -18,4 +18,5 @@ export const More = () => <Icon><path d="M5 12h.01M12 12h.01M19 12h.01" strokeWi
 export const Undo = () => <Icon><path d="M9 5 4 10l5 5" /><path d="M4 10h10a6 6 0 0 1 6 6v2" /></Icon>;
 export const Redo = () => <Icon><path d="m15 5 5 5-5 5" /><path d="M20 10H10a6 6 0 0 0-6 6v2" /></Icon>;
 export const Attach = () => <Icon size={20}><path d="m20 11.5-8.2 8.2a5 5 0 0 1-7-7l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7l-8.5 8.5a1.7 1.7 0 0 1-2.4-2.4l7.8-7.8" /></Icon>;
+export const Sliders = () => <Icon size={20}><path d="M4 7h9M17 7h3M4 17h3M11 17h9" /><circle cx="15" cy="7" r="2" /><circle cx="9" cy="17" r="2" /></Icon>;
 export const Send = () => <Icon><path d="M12 19V5M6 11l6-6 6 6" /></Icon>;

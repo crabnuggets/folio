@@ -100,7 +100,7 @@ function SignedInApp() {
   return <>
     {!signedIn && <main className="login-page"><div className="login-card">
       <Brand />
-      <h1>Every month on one sheet.</h1>
+      <h1>One sheet for each month.</h1>
       <p className="login-lede">Enter what comes in and what goes out. See what remains.</p>
       {message && <p className="notice" role="status">{message}</p>}
       {client && <button className="google-sign-in" disabled={busy} onClick={() => {
