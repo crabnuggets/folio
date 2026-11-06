@@ -5,12 +5,12 @@ const MAX = 9223372036854775807n;
 export function parseMoney(input: string, exponent: number, positive = false): string {
   if (!Number.isInteger(exponent) || exponent < 0 || exponent > 4) throw new Error('Unsupported currency precision.');
   const value = input.trim();
-  // An explicit decimal point avoids ambiguous thousands/decimal separators.
-  const match = /^(-?)(\d+)(?:\.(\d+))?$/.exec(value);
+  // Commas count only as exact thousands groups, so 12,4 stays an error rather than a guess.
+  const match = /^(-?)(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d+))?$/.exec(value);
   if (!match || (match[3]?.length ?? 0) > exponent) {
-    throw new Error(exponent === 2 ? 'Enter a number like 1250.50, without commas.' : `Enter a number with up to ${exponent} decimal places, without commas.`);
+    throw new Error(exponent === 2 ? 'Enter a number like 1,250.50.' : `Enter a number with up to ${exponent} decimal places.`);
   }
-  const digits = match[2] + (match[3] ?? '').padEnd(exponent, '0');
+  const digits = match[2].replaceAll(',', '') + (match[3] ?? '').padEnd(exponent, '0');
   const amount = BigInt((match[1] || '') + digits);
   if (amount < MIN || amount > MAX) throw new Error('Amount exceeds the supported range.');
   if (positive && amount <= 0n) throw new Error('Enter an amount greater than zero.');

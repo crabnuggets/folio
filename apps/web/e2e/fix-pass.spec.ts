@@ -37,7 +37,7 @@ test('amount Tab traverses both ways, exits boundaries, and returns to item opti
 
 test('closing details does not overwrite a newer focus target', async ({ page, backend }) => {
   await backend.add('Salary', '10000'); await signIn(page);
-  await page.getByRole('button', { name: 'Salary', exact: true }).click();
+  await page.getByRole('button', { name: 'Salary', exact: true }).focus(); await page.keyboard.press('Enter');
   await expect(page.getByLabel('Name', { exact: true })).toBeFocused();
   // Hold the close callback until the user has moved focus elsewhere.
   await page.evaluate(() => {
@@ -108,7 +108,7 @@ test('SGD is fixed before amounts and in empty later months with separate month 
   await signIn(page);
   const change = page.getByRole('button', { name: 'Change currency', exact: true }); await expect(change).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Settings', exact: true })).toHaveCount(0);
-  await expect(page.getByRole('region', { name: 'Monthly summary' })).toContainText('SGD 0.00');
+  await expect(page.getByRole('region', { name: 'Monthly summary' })).toContainText('SGD —');
   const monthSelect = page.getByRole('button', { name: /^Month:/ });
   await expect(monthSelect).toHaveText('October 2026'); await monthSelect.click(); await expect(page.getByRole('group', { name: 'Choose month' }).getByRole('button')).toHaveCount(12); await monthSelect.press('Escape');
   await page.getByRole('button', { name: 'Next month', exact: true }).click(); await expect(monthSelect).toHaveText('November 2026'); await expect(monthSelect).toBeEnabled();
