@@ -14,6 +14,7 @@ test('chat proposals stay out of totals until reviewed and saved through Go', as
   } }));
   await signIn(page);
   const composer = page.getByRole('complementary', { name: 'Add items with ChatGPT' });
+  await composer.getByRole('textbox', { name: 'Describe items to add' }).focus();
   await expect(composer.getByRole('button', { name: /^Upload/ })).toBeVisible();
   await composer.getByRole('textbox', { name: 'Describe items to add' }).fill('Add salary of 5000');
   await expect(page.getByRole('button', { name: /^Month:/ })).toBeDisabled();
@@ -21,6 +22,8 @@ test('chat proposals stay out of totals until reviewed and saved through Go', as
   const proposal = composer.getByRole('form', { name: 'Suggested item 1' });
   await expect(proposal).toBeVisible();
   expect((await backend.get<'MonthlySheet'>(`/monthly-sheets/${month}`)).money_in_minor).toBe('0');
+  await expect(proposal).toContainText('5,000.00');
+  await proposal.getByRole('button', { name: /^Edit/ }).click();
   await proposal.getByRole('textbox', { name: 'Amount', exact: true }).fill('6400.25');
   await proposal.getByRole('button', { name: 'Add item to October 2026', exact: true }).click();
   await expect(proposal).toHaveCount(0);

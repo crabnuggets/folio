@@ -146,7 +146,7 @@ export function MonthlySheet({ api, signedIn, onDirty, onLogout }: { api: ApiCli
     queue.current = queue.current.filter(value => !released.includes(value));
     released.forEach(value => value.resolve?.(false));
     setJobs(previous => { const next = { ...previous }; released.forEach(value => { delete next[value.key]; }); return next; });
-    setToast({ text: dirtyRef.current.size ? 'Latest saved values loaded. Your unsaved edits are still here to keep or discard.' : 'Latest saved values loaded.' }); void drain();
+    setToast({ text: dirtyRef.current.size ? 'Latest saved values loaded. Choose which to keep in each changed row.' : 'Latest saved values loaded.' }); void drain();
   };
   const feedback = (key: string, detail?: React.ReactNode) => {
     const job = jobs[key];
@@ -156,8 +156,9 @@ export function MonthlySheet({ api, signedIn, onDirty, onLogout }: { api: ApiCli
     return <div className={`row-status ${job.error ? 'error' : job.status}`} role={job.error ? 'alert' : 'status'}>
       {job.status === 'saving' ? 'Saving…' : job.status === 'queued' ? 'Waiting…' : job.status === 'saved' ? 'Saved' : job.uncertain ? errorMessage(job.error) : `Not saved. ${errorMessage(job.error)}`}
       {job.status === 'failed' && detail && <> {detail}</>}
+      {job.status === 'failed' && job.uncertain && ' Later changes wait until this one saves.'}
       {job.status === 'failed' && <div className="actions">
-        {!job.uncertain && job.error instanceof ApiError && [400, 409, 412, 422].includes(job.error.status) ? <button className="primary" onClick={() => void compare(job)}>Compare latest</button> : <button onClick={() => retry(job)} disabled={!online}>Try again</button>}</div>}
+        {!job.uncertain && job.error instanceof ApiError && [400, 409, 412, 422].includes(job.error.status) ? <button className="primary" onClick={() => void compare(job)}>Compare latest</button> : <button className="primary" onClick={() => retry(job)} disabled={!online}>Try again</button>}</div>}
     </div>;
   };
   const locked = (key: string) => Boolean(jobs[key] && jobs[key].status !== 'saved');
@@ -176,13 +177,13 @@ export function MonthlySheet({ api, signedIn, onDirty, onLogout }: { api: ApiCli
   const hasEntries = Boolean(sheet && (sheet.sections.some(section => section.items.length > 0) || sheet.remainder_minor !== '0'));
   const failed = Object.values(jobs).some(job => job.status === 'failed');
   const pending = queue.current.length > 0;
-  const status = !online ? 'Waiting for connection' : loading ? 'Loading…' : failed ? 'Not saved' : pending ? 'Saving…' : dirty.size ? 'Unsaved changes' : chatDirty ? 'Draft in chat' : available ? 'All changes saved' : 'Unavailable';
+  const status = !online ? 'Waiting for connection' : loading ? 'Loading…' : loadError != null ? 'Not loaded' : failed ? 'Not saved' : pending ? 'Saving…' : dirty.size ? 'Unsaved changes' : chatDirty ? 'Draft in chat' : available ? 'All changes saved' : 'Unavailable';
   return <div className="sheet-shell"><a className="skip-link" href="#main">Skip to content</a>
     <header className={`topbar ${!summaryVisible && sheet || status !== 'All changes saved' ? 'has-strip' : ''}`}><div className="topbar-inner">
       <div className="topbar-lead"><Brand />{!summaryVisible && sheet && <span className="topbar-remainder">Remainder <strong className={sheet.remainder_minor.startsWith('-') ? 'money critical' : 'money'}>{money(sheet.remainder_minor)}</strong>{sheet.missing_count > 0 && <span className="attention"> · {sheet.missing_count} blank</span>}</span>}</div>
       <MonthPicker month={month} current={currentMonth()} disabled={blocked || loading || !online} reason={blocked ? 'Save or discard your changes to switch months' : !online ? 'Reconnect to switch months' : undefined} onChange={changeMonth} />
       <div className="topbar-tools">
-        {failed ? <button className="save-status is-failed" onClick={() => document.querySelector('.row-status.error')?.scrollIntoView?.({ block: 'center' })}><Alert />{status}</button> : <span className={`save-status ${status === 'All changes saved' ? '' : 'is-pending'} ${status === 'All changes saved' && !hasEntries ? 'is-idle' : ''}`} role="status">{status === 'All changes saved' && <Check />}{status}</span>}
+        {failed ? <button className="save-status is-failed" onClick={() => document.querySelector('.row-status.error')?.scrollIntoView?.({ block: 'center' })}><Alert />{status}</button> : <span className={`save-status ${status === 'All changes saved' ? '' : 'is-pending'} ${status === 'All changes saved' && !hasEntries || !sheet && loading ? 'is-idle' : ''}`} role="status">{status === 'All changes saved' && <Check />}{status}</span>}
         <div className="history-tools">{(['undo', 'redo'] as const).map(action => <button key={action} className="icon-button" aria-label={action === 'undo' ? 'Undo' : 'Redo'} title={action === 'undo' ? 'Undo' : 'Redo'} disabled={blocked || !available || !sheet?.undo_token || (action === 'redo' ? redoToken !== sheet.undo_token : redoToken === sheet.undo_token)} onClick={() => void history(action)}>{action === 'undo' ? <Undo /> : <Redo />}</button>)}</div>
         <AppMenu signOutDisabled={blocked || loading} sectionsDisabled={!sheet} onSections={() => setManaging(true)} onLogout={onLogout} onExport={async () => {
           try {
@@ -195,9 +196,9 @@ export function MonthlySheet({ api, signedIn, onDirty, onLogout }: { api: ApiCli
       </div>
     </div></header>
     <main id="main" className="sheet-main" tabIndex={-1}>
-      <div className={`page-status ${loading && online ? 'is-loading' : ''}`} role="status">{!online ? "You're offline. Amounts you type stay in this tab until you reconnect." : loading && !sheet ? 'Loading your sheet. The server may take a moment to wake up.' : ''}</div>
+      <div className={`page-status ${loading && online ? 'is-loading' : ''}`} role="status">{!online ? "You're offline. Amounts you type stay here until you reconnect and save them. Closing this tab loses them." : loading && !sheet ? 'Loading your sheet. The server may take a moment to wake up.' : ''}</div>
       {jobs.undo?.status !== 'saved' && feedback('undo')}{jobs.redo?.status !== 'saved' && feedback('redo')}
-      {loadError != null && <div className="notice error" role="alert"><span>{loadError instanceof ApiError && loadError.status < 500 ? errorMessage(loadError) : `Couldn't load ${formatMonth(month)}. Check your connection and try again.`}{sheet ? ' The amounts shown may be out of date.' : ''}</span><button onClick={() => void load(loadedMonth.current !== month)}>Retry loading</button></div>}
+      {loadError != null && <div className={`notice error ${sheet ? '' : 'load-failed'}`} role="alert"><span>{loadError instanceof ApiError && loadError.status < 500 ? errorMessage(loadError) : `Couldn't load ${formatMonth(month)}. Check your connection and try again.`}{sheet ? ' The amounts shown may be out of date.' : ''}</span><button onClick={() => void load(loadedMonth.current !== month)}>Retry loading</button></div>}
       {!sheet && loading && <SheetSkeleton />}
       {sheet && <>
         {sheet.currency !== "SGD" && <p className="notice">Historical {sheet.currency} amounts are read-only and preserved in export. No currency conversion has been applied.</p>}
@@ -218,7 +219,7 @@ export function MonthlySheet({ api, signedIn, onDirty, onLogout }: { api: ApiCli
             <div className="section-heading"><div><h3>{section.name}</h3>{(section.amount_label === 'Bill amount' || section.missing_count > 0) && <span className="section-meta">{section.amount_label === 'Bill amount' && 'Bill amounts'}{section.amount_label === 'Bill amount' && section.missing_count > 0 && ' · '}{section.missing_count > 0 && <span className="attention">{section.missing_count} blank</span>}</span>}</div>{section.items.length > 0 && <output aria-label={`${section.name} subtotal`}>{groupAmount(moneyInput(section.total_minor, sheet.currency_exponent))}</output>}</div>
             {itemsIn(section).map(item => <ItemRow key={`${month}-${item.id}`} item={item} section={section} sheet={sheet} api={api} available={Boolean(available)} locked={locked(item.id) || locked(`${item.id}-restore`)} failed={jobs[item.id]?.status === 'failed'} feedback={detail => <>{feedback(item.id, detail)}{feedback(`${item.id}-restore`)}</>} perform={perform} markDirty={markDirty} notify={setToast} />)}
             {!itemsIn(section).length && hasEntries && <p className="empty">Nothing here this month.</p>}
-            <div className="section-actions">{addSection !== section.id && <button id={`add-${section.id}`} className="accent-button" disabled={!available || addSection !== null} onClick={() => { setAddSection(section.id); markDirty('add', true); }}><Plus />Add item<span className="sr-only"> to {section.name}</span></button>}
+            <div className="section-actions">{addSection !== section.id && <button id={`add-${section.id}`} className="accent-button" disabled={!available || addSection !== null || failed} onClick={() => { setAddSection(section.id); markDirty('add', true); }}><Plus />Add item<span className="sr-only"> to {section.name}</span></button>}
               {section.items.some(item => item.repeat_monthly && item.amount_minor == null && item.usual_amount_minor != null) && <button className="accent-button usual-button" disabled={blocked || !available} onClick={() => void perform(`usual-${section.id}`, latest => api.command<'MonthlySheet'>(`/monthly-sheets/${month}/usual-amounts`, { section_id: section.id }, { version: latest.version }))}>Use usual amounts</button>}</div>
             {feedback(`usual-${section.id}`)}
             {addSection === section.id && <AddItem section={section} sheet={sheet} api={api} signedIn={signedIn} perform={perform} locked={locked('add')} feedback={feedback('add')} focusItem={focusItem} close={() => { setAddSection(null); markDirty('add', false); requestAnimationFrame(() => document.getElementById(`add-${section.id}`)?.focus()); }} />}
@@ -235,7 +236,7 @@ export function MonthlySheet({ api, signedIn, onDirty, onLogout }: { api: ApiCli
         </Dialog>}
       </>}
     </main>
-    <div className="bottom-stack">
+    <div className="bottom-stack" hidden={!sheet && !toast}>
       {toast && <div className="toast" role="status"><span className="toast-text">{toast.text}</span>
         {toast.undo && <button className="toast-action" disabled={blocked || !available} onClick={() => void history('undo')}>{toast.undo}</button>}
         <button className="toast-close" aria-label="Dismiss message" onClick={() => setToast(null)}><Close /></button></div>}
@@ -289,7 +290,7 @@ function AppMenu({ signOutDisabled, sectionsDisabled, onSections, onExport, onLo
 function SectionRename({ section, disabled, perform, api, month, feedback }: { section: Section; disabled: boolean; perform: Perform; api: ApiClient; month: string; feedback: React.ReactNode }) {
   const [name, setName] = useState(section.name);
   return <div><form className="section-rename" onSubmit={event => { event.preventDefault(); void perform(`section-${section.id}`, latest => api.command<'MonthlySheet'>(`/monthly-sheets/${month}/sections/${section.id}`, { name }, { method: 'PUT', version: latest.version })); }}>
-    <div className="field"><label className="sr-only" htmlFor={`section-${section.id}`}>{section.name}</label><input id={`section-${section.id}`} value={name} onChange={event => setName(event.target.value)} required disabled={disabled} /></div><button disabled={disabled || name === section.name}>Rename</button>
+    <div className="field"><label className="sr-only" htmlFor={`section-${section.id}`}>{section.name}</label><input id={`section-${section.id}`} value={name} onChange={event => setName(event.target.value)} required disabled={disabled} /></div>{name !== section.name && <button disabled={disabled}>Rename</button>}
   </form>{feedback}</div>;
 }
 
@@ -331,6 +332,7 @@ function ItemRow({ item, section, sheet, api, available, locked, failed, feedbac
   };
   const saved = !current || item.amount_minor == null ? 'Not entered' : formatMoney(item.amount_minor, sheet.currency, sheet.currency_exponent);
   const reviewEdit = edited.current && !locked && (placementChanged || item.amount_minor !== editedFrom.current);
+  const entered = (() => { try { return groupAmount(moneyInput(amount(value, sheet.currency_exponent), sheet.currency_exponent)); } catch { return value.trim(); } })();
   const discard = () => { edited.current = false; markDirty(item.id, false); setValue(moneyInput(item.amount_minor, sheet.currency_exponent)); setError(''); requestAnimationFrame(() => document.getElementById(`item-${item.id}`)?.focus()); };
   const closeDetails = () => { detailsDirty.current = false; setDetails(false); requestAnimationFrame(() => { if (document.activeElement === document.body) document.getElementById(`item-${item.id}`)?.focus(); }); };
   return <div className={`sheet-row ${details ? 'is-open' : ''}`} data-item={item.id}>
@@ -355,7 +357,7 @@ function ItemRow({ item, section, sheet, api, available, locked, failed, feedbac
     </div>
     {error && <div className="row-status error field-error" id={`error-${item.id}`} role="alert">{error}</div>}
     {feedback(edited.current ? `Totals still use ${item.amount_minor == null ? 'a blank amount' : formatMoney(item.amount_minor, sheet.currency, sheet.currency_exponent)}.` : undefined)}
-    {reviewEdit && <div className="row-status">{placementChanged ? <>{current ? `Moved to ${sheet.sections.find(section => section.id === current.section_id)?.name} in another tab.` : 'Skipped in another tab.'} Your unsaved edits remain here. Save to reapply or discard them. Latest saved amount: {saved}</> : <>Your entry {groupAmount(value)} · Latest saved {saved}</>}<div className="actions"><button className={placementChanged ? undefined : 'primary'} onClick={() => save(true)} disabled={!available}>{!current ? 'Restore and reapply amount' : placementChanged ? 'Save amount' : `Keep ${groupAmount(value)}`}</button><button data-discard-amount={item.id} onClick={discard}>{placementChanged ? 'Discard edit' : item.amount_minor == null ? 'Leave blank' : `Use ${groupAmount(moneyInput(item.amount_minor, sheet.currency_exponent))}`}</button></div></div>}
+    {reviewEdit && <div className="row-status">{placementChanged ? <>{current ? `Moved to ${sheet.sections.find(section => section.id === current.section_id)?.name} in another tab.` : 'Skipped in another tab.'} Your unsaved edits remain here. Save to reapply or discard them. Latest saved amount: {saved}</> : <>Your entry {entered || 'blank'} · Latest saved {saved}</>}<div className="actions"><button onClick={() => save(true)} disabled={!available}>{!current ? 'Restore and reapply amount' : placementChanged ? 'Save amount' : entered ? `Keep my ${entered}` : 'Keep blank'}</button><button data-discard-amount={item.id} onClick={discard}>{placementChanged ? 'Discard edit' : item.amount_minor == null ? 'Use saved blank' : `Use saved ${groupAmount(moneyInput(item.amount_minor, sheet.currency_exponent))}`}</button></div></div>}
     {placementChanged && !reviewEdit && <p className="row-status">{current ? `Moved to ${sheet.sections.find(section => section.id === current.section_id)?.name} in another tab.` : 'Skipped in another tab.'} Your unsaved edits remain here. Save to reapply or discard them.</p>}
     {details && <ItemDetails item={item} sheet={sheet} api={api} perform={perform} saveEdit={saveEdit} disabled={locked || !available || edited.current} blockedByAmount={edited.current} focusName={!openedByTouch.current} markDirty={(key, value) => { detailsDirty.current = value; markDirty(key, value); }} onClose={closeDetails} clean={clean} notify={notify} />}
   </div>;
@@ -364,7 +366,7 @@ function ItemDetails({ item, sheet, api, perform, saveEdit, disabled, blockedByA
   item: Item; sheet: Sheet; api: ApiClient; perform: Perform; saveEdit(build: Job['build'], done: Job['done']): void; disabled: boolean; blockedByAmount: boolean; focusName: boolean; markDirty(key: string, value: boolean): void; onClose(): void; clean(sheet: Sheet): void; notify(toast: Toast): void;
 }) {
   const panel = useRef<HTMLDivElement>(null);
-  useEffect(() => { panel.current?.scrollIntoView?.({ block: 'nearest' }); }, []);
+  useEffect(() => { panel.current?.closest('.sheet-row')?.scrollIntoView?.({ block: 'nearest' }); }, []);
   const [name, setName] = useState(item.name);
   const [note, setNote] = useState(item.note);
   const [repeat, setRepeat] = useState(item.repeat_monthly);
@@ -392,12 +394,12 @@ function ItemDetails({ item, sheet, api, perform, saveEdit, disabled, blockedByA
     <div className="field"><label htmlFor={`${inputId}-name`}>Name</label><input id={`${inputId}-name`} autoFocus={focusName} value={name} required onChange={event => { setName(event.target.value); changed('name'); }} /></div>
     <div className="field"><label htmlFor={`${inputId}-note`}>Notes</label><textarea id={`${inputId}-note`} rows={1} value={note} onChange={event => { setNote(event.target.value); changed('note'); }} /></div>
     <div className="check-field"><input id={`${inputId}-repeat`} type="checkbox" role="switch" checked={repeat} onChange={event => { setRepeat(event.target.checked); changed('repeat_monthly'); changed('usual_amount_minor'); }} /><label htmlFor={`${inputId}-repeat`}>Repeat monthly</label></div>
-    {repeat && <><p className="quiet switch-hint">Appears each month. Enter the amount when you know it.</p><div className="field"><label htmlFor={`${inputId}-usual`}>Usual amount</label><input id={`${inputId}-usual`} inputMode="decimal" value={usual} onChange={event => { setUsual(event.target.value); changed('usual_amount_minor'); }} /><small>Optional suggestion. Existing monthly amounts stay as entered.</small></div></>}
+    {!repeat && item.repeat_monthly && <p className="quiet switch-hint">Won't appear from next month, once saved.</p>}
+    {repeat && <><p className="quiet switch-hint">Appears each month. Enter the amount when you know it.</p><div className="field"><label htmlFor={`${inputId}-usual`}>Usual amount</label><input id={`${inputId}-usual`} className="amount-input" inputMode="decimal" value={usual} onChange={event => { setUsual(event.target.value); changed('usual_amount_minor'); }} /><small>Optional suggestion. Existing monthly amounts stay as entered.</small></div></>}
     {error && <p className="error" role="alert">{error}</p>}
-    <div className="actions details-actions"><button className="primary">{findItem(sheet, item.id) ? 'Save details' : 'Restore and reapply details'}</button><button type="button" onClick={cancel}>Cancel</button></div>
-    <p className="details-more-title">This item</p><div className="details-more"><button type="button" disabled={!findItem(sheet, item.id) || item.amount_minor == null} onClick={() => void perform(item.id, latest => api.command<'MonthlySheet'>(`/monthly-sheets/${sheet.month}/items/${item.id}`, { ...updateInput(findItem(latest, item.id)), amount_minor: null }, { method: 'PUT', version: latest.version }), result => { done(result); notify({ text: `Cleared ${item.name}.`, undo: 'Undo clear' }); })}>Clear amount</button><span className="quiet">Leaves this month's amount blank.</span>
+    <div className="actions details-actions"><button className="primary" disabled={Boolean(findItem(sheet, item.id)) && !changedFields.current.size}>{findItem(sheet, item.id) ? 'Save details' : 'Restore and reapply details'}</button><button type="button" onClick={cancel}>Cancel</button></div>
+    <p className="details-more-title">This month</p><div className="details-more"><button type="button" disabled={!findItem(sheet, item.id) || item.amount_minor == null} onClick={() => void perform(item.id, latest => api.command<'MonthlySheet'>(`/monthly-sheets/${sheet.month}/items/${item.id}`, { ...updateInput(findItem(latest, item.id)), amount_minor: null }, { method: 'PUT', version: latest.version }), result => { done(result); notify({ text: `Cleared ${item.name}.`, undo: 'Undo clear' }); })}>Clear amount</button><span className="quiet">Leaves this month's amount blank.</span>
       <button type="button" disabled={!findItem(sheet, item.id)} onClick={() => void perform(item.id, latest => api.command<'MonthlySheet'>(`/monthly-sheets/${sheet.month}/items/${item.id}/remove`, {}, { version: latest.version }), result => { done(result); notify({ text: `Skipped ${item.name} this month.`, undo: 'Undo skip' }); })}>Skip this month</button><span className="quiet">Removes it from this month only. History stays saved.</span>
-      {item.repeat_monthly && <button type="button" disabled={!findItem(sheet, item.id)} onClick={() => void perform(item.id, latest => api.command<'MonthlySheet'>(`/monthly-sheets/${sheet.month}/items/${item.id}`, { ...updateInput(findItem(latest, item.id)), repeat_monthly: false, usual_amount_minor: null }, { method: 'PUT', version: latest.version }), done)}>Stop repeating</button>}{item.repeat_monthly && <span className="quiet">Won't appear from next month.</span>}
     </div>
   </fieldset></form></div>;
 }
@@ -456,7 +458,7 @@ function AddItem({ section, sheet, api, signedIn, perform, locked, feedback, clo
       <button className="quiet-button dismiss-suggestions" type="button" onClick={() => setShowSuggestions(false)}>Dismiss suggestions</button></div>}
       {suggestions.isError && <small>Saved names could not be loaded. You can still type a name.</small>}
     </div>
-    <div className="field"><label htmlFor={`${id}-amount`}>{section.amount_label}</label><input id={`${id}-amount`} inputMode="decimal" required value={value} onChange={event => setValue(event.target.value)} /></div></div>
+    <div className="field"><label htmlFor={`${id}-amount`}>{section.amount_label}</label><input id={`${id}-amount`} className="amount-input" inputMode="decimal" required value={value} onChange={event => setValue(event.target.value)} /></div></div>
     <div className="check-field"><input id={`${id}-repeat`} role="switch" type="checkbox" checked={repeat} onChange={event => { setRepeat(event.target.checked); setPreferenceEdited(true); }} /><label htmlFor={`${id}-repeat`}>Repeat monthly</label></div>
     {repeat && <><p className="quiet switch-hint">Appears each month. Enter the amount when you know it.</p><div className="check-field"><input id={`${id}-usual`} type="checkbox" role="switch" checked={suggestUsual} onChange={event => { setSuggestUsual(event.target.checked); setPreferenceEdited(true); setUsualEdited(true); }} /><label htmlFor={`${id}-usual`}>Make this the usual amount</label></div>{selected?.usual_amount_minor != null && suggestUsual && !usualEdited && <small>Saved usual amount: {formatMoney(selected.usual_amount_minor, sheet.currency, sheet.currency_exponent)}</small>}</>}
     {error && <p className="error" role="alert">{error}</p>}
