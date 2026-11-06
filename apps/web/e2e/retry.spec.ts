@@ -1,4 +1,6 @@
+import type { Page } from '@playwright/test';
 import { test, expect, bearer, month, sectionIds, signIn } from './fixtures';
+const row = (page: Page) => page.locator('.sheet-row').filter({ has: page.getByLabel('Amount for Salary', { exact: true }) });
 test('lost committed add retries the same command across renewed sign-in', async ({ page, backend }) => {
   await signIn(page); await page.getByRole('button', { name: 'Add item to Income', exact: true }).click();
   const form = page.getByRole('form', { name: 'Add item to Income' });
@@ -27,7 +29,8 @@ test('stale row edits compare latest before a fresh explicit save', async ({ pag
   const field = page.getByLabel('Amount for Salary', { exact: true }); await field.fill('6600'); await field.press('Tab');
   await expect(page.getByRole('button', { name: 'Compare latest' })).toBeVisible(); await expect(field).toHaveValue('6600');
   await page.getByRole('button', { name: 'Compare latest' }).click(); await expect(field).toHaveValue('6600');
-  await page.getByRole('button', { name: 'Save amount' }).click(); await expect(page.getByRole('button', { name: /^Month:/ })).toBeEnabled();
+  await expect(row(page)).toContainText('Latest saved SGD 6,500.00');
+  await page.getByRole('button', { name: 'Keep 6,600' }).click(); await expect(page.getByRole('button', { name: /^Month:/ })).toBeEnabled();
   const saved = await backend.get<'MonthlySheet'>(`/monthly-sheets/${month}`); expect(saved.sections.flatMap(section => section.items)[0]).toMatchObject({ amount_minor: '660000', note: 'Concurrent saved note' });
 });
 test('queued row saves use fresh versions and preserve another typed row during failure', async ({ page, backend }) => {

@@ -59,7 +59,7 @@ export async function addItem(page: Page, section: string, name: string, amount:
   await form.getByRole('combobox', { name: 'Name', exact: true }).fill(name);
   await form.getByLabel(section === 'Credit cards' ? 'Bill amount' : 'Amount', { exact: true }).fill(amount);
   if (repeat) await form.getByRole('switch', { name: 'Repeat monthly' }).check();
-  if (usual) await form.getByLabel('Suggest this amount each month').check();
+  if (usual) await form.getByLabel('Make this the usual amount').check();
   await form.getByRole('button', { name: 'Save item', exact: true }).click();
   await expect(form).toHaveCount(0);
 }
