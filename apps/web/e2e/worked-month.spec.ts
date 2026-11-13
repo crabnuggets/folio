@@ -36,12 +36,12 @@ test('recurring names start blank, usual amounts respect edits and zero, skip di
   const zero = page.getByLabel('Amount for Zero allowance', { exact: true });
   const card = page.getByLabel('Bill amount for Everyday card', { exact: true });
   await expect(savings).toHaveValue(''); await expect(card).toHaveValue('');
-  await expect(page.getByRole('region', { name: 'Monthly summary' })).toContainText('3 items still blank');
+  await expect(page.getByRole('region', { name: 'Monthly summary' })).toContainText('Totals leave out 3 blank items');
   await zero.fill('0'); await zero.press('Enter');
   await expect(page.getByRole('button', { name: /^Month:/ })).toBeEnabled();
   await page.getByRole('button', { name: 'Use usual amounts', exact: true }).click();
   await expect(savings).toHaveValue('900.00'); await expect(zero).toHaveValue('0.00'); await expect(card).toHaveValue('');
-  await expect(page.getByRole('region', { name: 'Monthly summary' })).toContainText('1 item still blank');
+  await expect(page.getByRole('region', { name: 'Monthly summary' })).toContainText('Totals leave out 1 blank item');
   await page.getByRole('button', { name: 'Everyday card Monthly', exact: true }).click();
   await page.getByRole('button', { name: 'Skip this month', exact: true }).click();
   await expect(card).toHaveCount(0);

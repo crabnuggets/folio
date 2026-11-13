@@ -29,7 +29,7 @@ test('stale row edits compare latest before a fresh explicit save', async ({ pag
   const field = page.getByLabel('Amount for Salary', { exact: true }); await field.fill('6600'); await field.press('Tab');
   await expect(page.getByRole('button', { name: 'Compare latest' })).toBeVisible(); await expect(field).toHaveValue('6600');
   await page.getByRole('button', { name: 'Compare latest' }).click(); await expect(field).toHaveValue('6600');
-  await expect(row(page)).toContainText('Latest saved SGD 6,500.00');
+  await expect(row(page)).toContainText('Latest saved: SGD 6,500.00');
   await page.getByRole('button', { name: 'Keep my 6,600.00' }).click(); await expect(page.getByRole('button', { name: /^Month:/ })).toBeEnabled();
   const saved = await backend.get<'MonthlySheet'>(`/monthly-sheets/${month}`); expect(saved.sections.flatMap(section => section.items)[0]).toMatchObject({ amount_minor: '660000', note: 'Concurrent saved note' });
 });

@@ -92,6 +92,7 @@ input[role=switch]:checked::before { transform:translateX(14px); }
 .topbar-remainder { color:var(--secondary); font-size:.8125rem; white-space:nowrap; }
 .topbar-remainder strong { margin-left:4px; color:var(--text); font-weight:600; }
 .topbar-remainder strong.critical { color:var(--critical); }
+.topbar-blank { margin-left:10px; }
 .month-switcher { display:flex; align-items:center; gap:2px; }
 .month-picker { position:relative; }
 #month { gap:6px; min-width:172px; white-space:nowrap; border-color:transparent; background:transparent; font-size:1rem; font-weight:600; letter-spacing:-.01em; font-variant-numeric:tabular-nums; }
@@ -131,7 +132,7 @@ input[role=switch]:checked::before { transform:translateX(14px); }
 .money { font-variant-numeric:tabular-nums; }
 
 /* Summary */
-.remainder { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:24px 64px; margin-bottom:32px; padding:28px; border:1px solid var(--border); border-radius:calc(var(--radius) + 4px); background:linear-gradient(125deg,var(--surface) 50%,color-mix(in srgb,var(--accent-subtle) 70%,var(--surface))); box-shadow:var(--shadow-card); }
+.remainder { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:24px 64px; margin-bottom:32px; padding:28px; border:1px solid var(--border); border-radius:calc(var(--radius) + 4px); background:var(--surface); box-shadow:var(--shadow-card); }
 .remainder h1 { color:var(--secondary); font-size:.875rem; font-weight:500; }
 .hero-amount { display:block; margin:6px 0 8px; font-size:clamp(2.25rem,4.4vw,3.25rem); font-weight:600; letter-spacing:-.032em; line-height:1.08; overflow-wrap:anywhere; font-variant-numeric:tabular-nums; }
 .hero-amount.is-negative { color:var(--critical); }
@@ -160,7 +161,7 @@ input[role=switch]:checked::before { transform:translateX(14px); }
 .section-heading { display:flex; justify-content:space-between; align-items:baseline; gap:12px; padding:12px 20px 10px; }
 .section-heading h3 { font-size:.9375rem; letter-spacing:-.006em; }
 .section-heading output { font-size:.9375rem; font-weight:600; text-align:right; overflow-wrap:anywhere; font-variant-numeric:tabular-nums; }
-.section-meta { display:block; margin-top:1px; color:var(--secondary); font-size:.8125rem; font-weight:400; }
+.section-meta { display:flex; flex-wrap:wrap; gap:0 10px; margin-top:1px; color:var(--secondary); font-size:.8125rem; font-weight:400; }
 .sheet-row { position:relative; display:grid; grid-template-columns:minmax(0,1fr) 136px; column-gap:8px; align-items:start; min-height:46px; padding:4px 12px 4px 20px; border-top:1px solid var(--border); }
 .sheet-row.is-open { background:var(--muted); }
 .sheet-row.is-open .monthly-label { background:var(--surface); }
@@ -370,7 +371,6 @@ dialog::backdrop { background:#10151466; }
   .item-label .monthly-label { margin-left:6px; }
   .sheet-row:has(.edit-actions) .monthly-label { visibility:visible; }
   .edit-actions { position:static; justify-content:flex-end; gap:6px; margin-top:6px; background:none; }
-  .coverage-basis { display:none; }
   .coverage { padding-block:0; }
   .summary-flow { gap:10px; }
   .hero-amount { margin:2px 0 4px; }
