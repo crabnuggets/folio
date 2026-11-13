@@ -111,7 +111,7 @@ function SignedInApp() {
       {config?.development_key === true && <div className="dev-sign-in">
         <Form submit="Sign in" fields={[{ name: 'token', label: 'Access token', type: 'password', required: true }]} onSubmit={async values => {
           const token = text(values, 'token');
-          if (!token || /\s/.test(token)) throw new Error('Enter a sign-in key without spaces.');
+          if (!token || /\s/.test(token)) throw new Error('Enter an access token without spaces.');
           api.setToken(token);
           try {
             await api.get<'Settings'>('/settings');
