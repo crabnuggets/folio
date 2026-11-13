@@ -1,4 +1,6 @@
-# Matt Pocock skills
+# Repository agent skills
+
+## Matt Pocock skills
 
 This directory vendors all 38 skills from [mattpocock/skills](https://github.com/mattpocock/skills) at revision `59db609eb1e18aaf59b63284d0e52255aff0c63c`, the checkout used by plugin version 1.3.1.
 
@@ -27,8 +29,16 @@ The following skills are maintained locally, outside the upstream collection:
 
 - [polish](polish/SKILL.md) runs delegated review, validation, and fixes after implementation for the user's requested number of rounds, defaulting to three. Requests to polish an implementation or run iterative review-and-fix passes trigger it automatically. Round 1 covers the full implementation; subsequent rounds cover only additional changes.
 
-## Updating
+## Anthropic frontend design
+
+[frontend-design](frontend-design/SKILL.md) is vendored from [anthropics/skills](https://github.com/anthropics/skills/tree/2c5958ecac7cee2b583967a2c4981d0f4a75c579/skills/frontend-design) at revision `2c5958ecac7cee2b583967a2c4981d0f4a75c579`. Its `SKILL.md` and [Apache 2.0 license](frontend-design/LICENSE.txt) are unmodified upstream copies.
+
+Codex discovers the skill here through `.agents/skills`; invoke it with `$frontend-design`. Claude Code discovers the [entry point](../../.claude/skills/frontend-design/SKILL.md) through `.claude/skills`; invoke it with `/frontend-design`. The Claude entry point reads the shared instructions, so updates have one authoritative copy. Both tools can also select the skill automatically from its description.
+
+To update it, replace both upstream files from one pinned revision and record that revision here. Keep the Claude entry point's name and description aligned with the upstream frontmatter.
+
+## Updating Matt Pocock skills
 
 Choose an upstream revision, then use Codex's `skill-installer` helper with `--repo mattpocock/skills --ref <revision> --dest <staging-directory> --path <upstream-skill-paths>`. Install every directory under upstream `skills/` that contains a `SKILL.md`; copy each complete skill folder here by its basename. Preserve supporting files and the upstream license, and update this revision and inventory. Review changes before replacing the checked-in copies.
 
-The upstream skills are distributed under the [MIT license](LICENSE), copyright 2026 Matt Pocock.
+The Matt Pocock skills are distributed under the [MIT license](LICENSE), copyright 2026 Matt Pocock.
