@@ -29,7 +29,7 @@ dl { margin:0; }
 a:focus-visible,button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
 
 /* Ambient background: two slow waves drift behind solid surfaces. Transform-only, so it stays on the compositor. */
-body::before,body::after { content:''; position:fixed; z-index:-1; left:-30vw; top:40vh; width:160vw; height:100vh; border-radius:44% 56% 0 0 / 28% 38% 0 0; background:var(--wave-a); transform-origin:50% 80%; pointer-events:none; will-change:transform; animation:folio-wave 11s ease-in-out infinite alternate; }
+body::before,body::after { content:''; position:fixed; z-index:-1; left:50%; top:40vh; width:max(160vw,1100px); margin-left:calc(max(160vw,1100px) / -2); height:100vh; border-radius:44% 56% 0 0 / 28% 38% 0 0; background:var(--wave-a); transform-origin:50% 80%; pointer-events:none; will-change:transform; animation:folio-wave 11s ease-in-out infinite alternate; }
 body::after { top:58vh; border-radius:60% 40% 0 0 / 45% 30% 0 0; background:var(--wave-b); animation-duration:15s; animation-direction:alternate-reverse; }
 @keyframes folio-wave { from { transform:translate3d(-5%,3%,0) rotate(-6deg); } to { transform:translate3d(5%,-5%,0) rotate(7deg); } }
 
@@ -164,12 +164,12 @@ input[role=switch]:checked::before { transform:translateX(14px); }
 .section-meta { display:flex; flex-wrap:wrap; gap:0 10px; margin-top:1px; color:var(--secondary); font-size:.8125rem; font-weight:400; }
 .sheet-row { position:relative; display:grid; grid-template-columns:minmax(0,1fr) 136px; column-gap:8px; align-items:start; min-height:46px; padding:4px 12px 4px 20px; border-top:1px solid var(--border); }
 .sheet-row.is-open { background:var(--muted); }
-.sheet-row.is-open .monthly-label { background:var(--surface); }
+.sheet-row.is-open .monthly-label,.sheet-row.is-open .amount-field:not(:focus) { background:var(--surface); }
 .item-cell { display:flex; flex-direction:column; align-items:stretch; min-width:0; padding:7px 0; }
 /* Leading disclosure chevron, kept apart from the Monthly tag so neither reads as a dropdown. */
 .item-name>svg { flex-shrink:0; width:12px; height:12px; margin-top:.36em; color:var(--tertiary); transition:transform .15s,color .12s; }
-.item-label { min-width:0; }
-.item-label .monthly-label { margin-left:8px; }
+/* Name and tag wrap as a pair: a wrapped tag starts flush under the name. */
+.item-label { display:flex; flex-wrap:wrap; align-items:baseline; gap:2px 8px; min-width:0; }
 .sheet-row:has(.edit-actions) .monthly-label { visibility:hidden; }
 .item-name[aria-expanded=true]>svg { transform:rotate(90deg); color:var(--accent-text); }
 .item-name { display:inline-flex; align-self:flex-start; align-items:flex-start; justify-content:flex-start; flex-wrap:nowrap; gap:0 6px; max-width:100%; min-height:0; padding:0; border:0; border-radius:4px; background:none; font-size:.9375rem; font-weight:400; text-align:left; overflow-wrap:anywhere; }
@@ -233,7 +233,7 @@ input[role=switch]:checked::before { transform:translateX(14px); }
 .suggestions li[aria-selected=true],.suggestions li:hover { background:var(--accent-subtle); }
 .suggestions small { display:block; }
 .dismiss-suggestions { min-height:32px; padding:4px 10px; font-size:.8125rem; }
-footer { padding-top:12px; color:var(--secondary); font-size:.8125rem; }
+footer { padding-top:12px; color:var(--text); font-size:.8125rem; }
 
 /* Dialog */
 dialog { width:min(480px,calc(100vw - 32px)); max-height:calc(100dvh - 32px); padding:0; border:1px solid var(--border); border-radius:16px; background:var(--surface-raised); color:var(--text); box-shadow:var(--shadow-float); }
@@ -266,7 +266,7 @@ dialog::backdrop { background:#10151466; }
 .bottom-stack { position:fixed; z-index:15; left:0; right:0; bottom:0; display:flex; flex-direction:column; align-items:center; padding:8px 16px max(16px,env(safe-area-inset-bottom)); pointer-events:none; }
 .bottom-stack>* { pointer-events:auto; }
 /* Soft frosted fade so content scrolling under the floating composer never shows raw, cut-off text. */
-.bottom-stack::before { content:''; position:absolute; z-index:-1; inset:-32px 0 0; pointer-events:none; background:linear-gradient(to top,var(--glass) 45%,transparent); -webkit-backdrop-filter:blur(12px); backdrop-filter:blur(12px); -webkit-mask-image:linear-gradient(to top,#000 55%,transparent); mask-image:linear-gradient(to top,#000 55%,transparent); }
+.bottom-stack::before { content:''; position:absolute; z-index:-1; inset:-20px 0 0; pointer-events:none; background:linear-gradient(to top,var(--glass-solid) calc(100% - 28px),transparent); -webkit-backdrop-filter:blur(12px); backdrop-filter:blur(12px); -webkit-mask-image:linear-gradient(to top,#000 calc(100% - 28px),transparent); mask-image:linear-gradient(to top,#000 calc(100% - 28px),transparent); }
 .toast { position:absolute; z-index:2; bottom:calc(100% + 8px); display:flex; align-items:center; gap:8px; max-width:min(600px,calc(100% - 32px)); padding:6px 6px 6px 16px; border-radius:var(--radius); background:var(--text); color:var(--canvas); box-shadow:var(--shadow-float); font-size:.875rem; }
 .toast-text { padding:4px 8px 4px 0; overflow-wrap:anywhere; }
 .toast button { min-height:32px; padding:4px 10px; border-color:transparent; background:transparent; color:inherit; font-size:.875rem; white-space:nowrap; }
@@ -356,7 +356,8 @@ dialog::backdrop { background:#10151466; }
   .inline-form-fields { grid-template-columns:1fr; }
   .bottom-stack { padding-inline:8px; }
   .topbar.has-strip .save-status:not(.is-pending,.is-failed) { font-size:0; gap:0; }
-  .sheet-row { padding-right:8px; }
+  .sheet-row { grid-template-columns:minmax(0,1fr) 120px; padding-right:8px; }
+  .sheet-row>.row-status.saving,.sheet-row>.row-status.queued,.sheet-row>.row-status.saved { right:132px; }
   .chat-proposal-fields.is-even { grid-template-columns:1fr; }
   .chat-composer.is-idle button { display:none; }
   .chat-composer.is-idle textarea { padding-inline:10px; }
@@ -368,7 +369,6 @@ dialog::backdrop { background:#10151466; }
   .coverage button { margin-left:-8px; }
   .chat-panel { max-height:calc(100dvh - 176px - env(safe-area-inset-bottom)); }
   .sheet-shell:has(.amount-field:focus,.item-details,.inline-form) .bottom-stack::before { display:none; }
-  .item-label .monthly-label { margin-left:6px; }
   .sheet-row:has(.edit-actions) .monthly-label { visibility:visible; }
   .edit-actions { position:static; justify-content:flex-end; gap:6px; margin-top:6px; background:none; }
   .coverage { padding-block:0; }

@@ -109,7 +109,7 @@ function SignedInApp() {
         void signInWithGoogle(client).catch(error => setMessage(errorMessage(error))).finally(() => setBusy(false));
       }}><GoogleMark />{busy ? 'Signing in...' : 'Sign in with Google'}</button>}
       {config?.development_key === true && <div className="dev-sign-in">
-        <Form submit="Sign in" fields={[{ name: 'token', label: 'Access token', type: 'password', required: true, hint: 'Your development sign-in key stays in memory for this tab only.' }]} onSubmit={async values => {
+        <Form submit="Sign in" fields={[{ name: 'token', label: 'Access token', type: 'password', required: true }]} onSubmit={async values => {
           const token = text(values, 'token');
           if (!token || /\s/.test(token)) throw new Error('Enter a sign-in key without spaces.');
           api.setToken(token);
@@ -118,7 +118,7 @@ function SignedInApp() {
             setExpiresAt(tokenExpiry(token)); setMessage(''); setStarted(true); setSignedIn(true);
           } catch (error) { api.setToken(null); throw error; }
         }} />
-        <p className="fine-print">Development sign-in. No key is saved to browser storage.</p>
+        <p className="fine-print">Development sign-in. Your access token stays in this tab's memory and is never saved.</p>
       </div>}
       {!config && !message && <p role="status">Loading sign-in...</p>}
       {config && !client && !config.development_key && <p role="status">Sign-in is not configured. Contact the application owner.</p>}
