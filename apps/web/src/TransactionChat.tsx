@@ -50,6 +50,21 @@ export function TransactionChat({ api, signedIn, month, sheet, available, unavai
     const target = proposals.length === 0 ? document.getElementById(`${id}-text`) : forms[before === 0 ? 0 : Math.min(resolvedIndex.current, forms.length - 1)]?.querySelector<HTMLElement>('button:not(:disabled)');
     target?.focus();
   }, [proposals.length]);
+  // Focus that was inside the chat (or dropped to the page) lands on the control that now leads the review.
+  const focusReview = () => {
+    if (!root.current || document.activeElement !== document.body && !root.current.contains(document.activeElement)) return;
+    const forms = root.current.querySelectorAll<HTMLElement>('.chat-proposal');
+    const target = forms[Math.min(resolvedIndex.current, forms.length - 1)]?.querySelector<HTMLElement>('button:not(:disabled)')
+      ?? root.current.querySelector<HTMLElement>('.chat-review-bar button:not(:disabled)') ?? document.getElementById(`${id}-text`);
+    target?.focus();
+  };
+  // Collapsing a pending review hands focus to Review; reopening returns it to the suggestion last in use.
+  const wasExpanded = useRef(expanded);
+  useEffect(() => {
+    if (wasExpanded.current === expanded) return;
+    wasExpanded.current = expanded;
+    if (proposals.length) focusReview();
+  }, [expanded]);
   const refresh = async () => {
     try {
       const result = await api.get<'ChatGPTConnection'>('/chatgpt/connection');
@@ -178,7 +193,7 @@ export function TransactionChat({ api, signedIn, month, sheet, available, unavai
           resolvedIndex.current = index;
           try { await addProposal(item); }
           catch (error) { setError(errorMessage(error)); }
-        }}><fieldset disabled={itemLocked || busy}>
+        }}><fieldset disabled={itemLocked || busy || adding}>
           {!item.editing && !duplicate && <div className="chat-proposal-summary"><div><strong>{item.name}</strong><small className="chat-proposal-meta"><span>{section?.name}</span>{item.repeat && <span>Monthly</span>}{item.note && <span>{item.note}</span>}</small></div><span className="money">{item.amount.trim() ? groupAmount(item.amount.trim()) : 'Blank'}</span></div>}
           {(item.editing || duplicate) && <><div className="chat-proposal-fields"><div className="field"><label htmlFor={`${item.key}-name`}>Name</label><input id={`${item.key}-name`} value={item.name} required maxLength={120} onChange={event => edit(item.key, { name: event.target.value })} /></div>
           <div className="field"><label htmlFor={`${item.key}-amount`}>{section?.amount_label === 'Bill amount' ? 'Bill amount' : 'Amount'}</label><input id={`${item.key}-amount`} className="amount-input" inputMode="decimal" placeholder="Leave blank" value={item.amount} onChange={event => edit(item.key, { amount: event.target.value })} /></div></div>
@@ -194,12 +209,12 @@ export function TransactionChat({ api, signedIn, month, sheet, available, unavai
     <div className="chat-dock">
       {proposals.length > 0 ? <div className="chat-review-bar"><span>{proposals.length} to review</span>
         {!expanded && <button type="button" className="primary" onClick={() => setExpanded(true)}>Review</button>}
-        {expanded && proposals.length > 1 && <><button type="button" className="quiet-button" disabled={busy || adding || proposals.some(item => locked(item.key))} onClick={() => setProposals([])}>Discard all</button><button type="button" className="primary" disabled={!ready || busy || adding || proposals.every(isDuplicate) || proposals.some(item => locked(item.key))} onClick={async () => {
+        {expanded && proposals.length > 1 && <><button type="button" className="quiet-button" disabled={busy || adding || proposals.some(item => locked(item.key))} onClick={() => setProposals([])}>Discard all</button>{(adding || proposals.some(item => !isDuplicate(item))) && <button type="button" className="primary" disabled={!ready || busy || adding || proposals.some(item => locked(item.key))} onClick={async () => {
           setError(''); setAdding(true);
           try { for (const item of proposals) if (!isDuplicate(item) && !await addProposal(item)) break; }
           catch (error) { setError(errorMessage(error)); }
-          finally { setAdding(false); }
-        }}>{adding ? 'Adding…' : (count => count === 1 ? 'Add 1 item' : `Add ${count} items`)(proposals.filter(item => !isDuplicate(item)).length)}</button></>}</div> : <>
+          finally { setAdding(false); requestAnimationFrame(focusReview); }
+        }}>{adding ? 'Adding…' : (count => count === 1 ? 'Add 1 item' : `Add ${count} items`)(proposals.filter(item => !isDuplicate(item)).length)}</button>}</>}</div> : <>
       {attachment && <div className="chat-attachment"><span>{attachment.name}</span><button type="button" className="quiet-button" aria-label={`Remove ${attachment.name}`} disabled={busy} onClick={() => setAttachment(undefined)}>Remove</button></div>}
       {/* Above the composer: revealing it on focus must not move Send under a pressed pointer. */}
       <p className="chat-disclosure" id={`${id}-hint`}>Sending shares your text and files with OpenAI.</p>
