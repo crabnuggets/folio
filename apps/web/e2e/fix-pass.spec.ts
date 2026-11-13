@@ -16,12 +16,13 @@ for (const keyboard of [false, true]) test(`discard amount without a mutation us
   expect((await backend.get<'MonthlySheet'>(`/monthly-sheets/${month}`)).money_in_minor).toBe('12400');
 });
 
-test('amount Tab traverses both ways, exits boundaries, and returns to item options', async ({ page, backend }) => {
+test('amount Enter traverses both ways, Tab keeps page order, and Escape returns to item options', async ({ page, backend }) => {
   await backend.add('Salary', '10000'); await backend.add('Refund', '2000', sectionIds.otherIn); await signIn(page);
   const first = page.getByLabel('Amount for Salary', { exact: true }); const last = page.getByLabel('Amount for Refund', { exact: true });
   await first.focus(); await first.press('Shift+Tab'); await expect(page.getByRole('button', { name: 'Salary', exact: true })).toBeFocused();
-  await first.fill('101'); await first.press('Tab'); await expect(last).toBeFocused();
-  await expect(first).toBeEnabled(); await last.fill('21'); await last.press('Shift+Tab'); await expect(first).toBeFocused();
+  await first.press('Tab'); await expect(page.getByRole('button', { name: 'Add item to Income', exact: true })).toBeFocused();
+  await first.fill('101'); await first.press('Enter'); await expect(last).toBeFocused();
+  await expect(first).toBeEnabled(); await last.fill('21'); await last.press('Shift+Enter'); await expect(first).toBeFocused();
   await expect(last).toBeEnabled(); await first.press('Escape'); await expect(page.getByRole('button', { name: 'Salary', exact: true })).toBeFocused();
   await page.keyboard.press('Enter'); await expect(page.getByLabel('Name', { exact: true })).toBeFocused();
   await page.keyboard.press('Tab'); await expect(page.getByLabel('Notes', { exact: true })).toBeFocused();

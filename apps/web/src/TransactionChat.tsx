@@ -39,6 +39,17 @@ export function TransactionChat({ api, signedIn, month, sheet, available, unavai
   const busy = reading || processing;
   const dirty = Boolean(text.trim() || attachment || proposals.length || busy);
   useEffect(() => { onDirty(dirty); }, [dirty, onDirty]);
+  // Keep keyboard focus in the review: first suggestion on arrival, the neighbour after one is resolved, the composer at the end.
+  const resolvedIndex = useRef(0);
+  const proposalCount = useRef(0);
+  useEffect(() => {
+    const before = proposalCount.current; proposalCount.current = proposals.length;
+    if (before === proposals.length || !root.current) return;
+    if (document.activeElement !== document.body && !root.current.contains(document.activeElement)) return;
+    const forms = root.current.querySelectorAll<HTMLElement>('.chat-proposal');
+    const target = proposals.length === 0 ? document.getElementById(`${id}-text`) : forms[before === 0 ? 0 : Math.min(resolvedIndex.current, forms.length - 1)]?.querySelector<HTMLElement>('button:not(:disabled)');
+    target?.focus();
+  }, [proposals.length]);
   const refresh = async () => {
     try {
       const result = await api.get<'ChatGPTConnection'>('/chatgpt/connection');
@@ -164,17 +175,18 @@ export function TransactionChat({ api, signedIn, month, sheet, available, unavai
         return <form key={item.key} className="chat-proposal" aria-label={`Suggested item ${index + 1}`} onSubmit={async event => {
           event.preventDefault(); setError('');
           if (!sheet || duplicate || !ready || itemLocked) return;
+          resolvedIndex.current = index;
           try { await addProposal(item); }
           catch (error) { setError(errorMessage(error)); }
         }}><fieldset disabled={itemLocked || busy}>
-          {!item.editing && !duplicate && <div className="chat-proposal-summary"><div><strong>{item.name}</strong><small>{section?.name}{item.repeat ? ' · Monthly' : ''}{item.note ? ` · ${item.note}` : ''}</small></div><span className="money">{item.amount.trim() ? groupAmount(item.amount.trim()) : 'Blank'}</span></div>}
+          {!item.editing && !duplicate && <div className="chat-proposal-summary"><div><strong>{item.name}</strong><small className="chat-proposal-meta"><span>{section?.name}</span>{item.repeat && <span>Monthly</span>}{item.note && <span>{item.note}</span>}</small></div><span className="money">{item.amount.trim() ? groupAmount(item.amount.trim()) : 'Blank'}</span></div>}
           {(item.editing || duplicate) && <><div className="chat-proposal-fields"><div className="field"><label htmlFor={`${item.key}-name`}>Name</label><input id={`${item.key}-name`} value={item.name} required maxLength={120} onChange={event => edit(item.key, { name: event.target.value })} /></div>
           <div className="field"><label htmlFor={`${item.key}-amount`}>{section?.amount_label === 'Bill amount' ? 'Bill amount' : 'Amount'}</label><input id={`${item.key}-amount`} className="amount-input" inputMode="decimal" placeholder="Leave blank" value={item.amount} onChange={event => edit(item.key, { amount: event.target.value })} /></div></div>
           <div className="chat-proposal-fields is-even"><div className="field"><label htmlFor={`${item.key}-section`}>Section</label><select id={`${item.key}-section`} value={item.section_id} required onChange={event => edit(item.key, { section_id: event.target.value })}>{(['in', 'out'] as const).map(direction => <optgroup key={direction} label={`Money ${direction}`}>{sheet?.sections.filter(section => section.direction === direction).map(section => <option key={section.id} value={section.id}>{section.name}</option>)}</optgroup>)}</select></div>
           <div className="field"><label htmlFor={`${item.key}-note`}>Notes</label><input id={`${item.key}-note`} value={item.note} maxLength={2000} onChange={event => edit(item.key, { note: event.target.value })} /></div>
           </div><div className="check-field"><input id={`${item.key}-repeat`} type="checkbox" role="switch" checked={item.repeat} onChange={event => edit(item.key, { repeat: event.target.checked })} /><label htmlFor={`${item.key}-repeat`}>Repeat monthly</label></div></>}
           {duplicate && <p className="notice">An item with this name already exists on this side of the sheet. Edit it in the sheet, or choose a different name here.</p>}
-          <div className="actions"><button type="submit" className={proposals.length === 1 ? 'primary' : undefined} disabled={!ready || duplicate}>Add item<span className="sr-only"> to {label}</span></button>{!duplicate && <button type="button" className="quiet-button" onClick={() => edit(item.key, { editing: !item.editing })}>{item.editing ? 'Done' : 'Edit'}<span className="sr-only"> suggestion</span></button>}<button type="button" className="quiet-button" onClick={() => setProposals(previous => previous.filter(value => value.key !== item.key))}>Discard<span className="sr-only"> suggestion</span></button></div>
+          <div className="actions"><button type="submit" className={proposals.length === 1 ? 'primary' : undefined} disabled={!ready || duplicate}>Add item<span className="sr-only"> to {label}</span></button>{!duplicate && <button type="button" className="quiet-button" onClick={() => edit(item.key, { editing: !item.editing })}>{item.editing ? 'Done' : 'Edit'}<span className="sr-only"> suggestion</span></button>}<button type="button" className="quiet-button" onClick={() => { resolvedIndex.current = index; setProposals(previous => previous.filter(value => value.key !== item.key)); }}>Discard<span className="sr-only"> suggestion</span></button></div>
         </fieldset>{feedback(item.key)}</form>;
       })}</div>}
       {error && <p className="notice error" role="alert">{error}</p>}
@@ -187,7 +199,7 @@ export function TransactionChat({ api, signedIn, month, sheet, available, unavai
           try { for (const item of proposals) if (!isDuplicate(item) && !await addProposal(item)) break; }
           catch (error) { setError(errorMessage(error)); }
           finally { setAdding(false); }
-        }}>{adding ? 'Adding…' : `Add ${proposals.length} items`}</button></>}</div> : <>
+        }}>{adding ? 'Adding…' : (count => count === 1 ? 'Add 1 item' : `Add ${count} items`)(proposals.filter(item => !isDuplicate(item)).length)}</button></>}</div> : <>
       {attachment && <div className="chat-attachment"><span>{attachment.name}</span><button type="button" className="quiet-button" aria-label={`Remove ${attachment.name}`} disabled={busy} onClick={() => setAttachment(undefined)}>Remove</button></div>}
       {/* Above the composer: revealing it on focus must not move Send under a pressed pointer. */}
       <p className="chat-disclosure" id={`${id}-hint`}>Sending shares your text and files with OpenAI.</p>

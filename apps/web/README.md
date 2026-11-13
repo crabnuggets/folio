@@ -29,13 +29,15 @@ Credit cards use Bill amount. Saved history suggests names without copying prior
 amounts. Repeat monthly is optional and off for new names. Fixed recurring amounts
 can have a usual suggestion; applying suggestions fills only blank rows.
 
-Edit a row's amount directly. Blur or Enter saves; Tab and Enter move between
-amounts. Shift+Tab moves to the previous amount; Tab exits normally at either
-boundary. Escape focuses Discard edit for an unsaved amount, or the item name
+Edit a row's amount directly. Blur or Enter saves. Enter moves to the next
+amount and Shift+Enter to the previous one. Tab follows page order, so item
+names and Add item stay reachable. Escape focuses Discard edit for an unsaved amount, or the item name
 otherwise. Enter on the item name opens and focuses details. Blank differs from
 an explicit zero. Details contain notes, rename, recurrence and usual amounts.
 Skip this month retains history and recurrence; turning off Repeat monthly ends
-future automatic rows. Clear and skip offer Undo.
+future automatic rows. Clear and skip offer Undo, and wait until
+unsaved detail changes are saved or cancelled. An untouched Add item form does
+not count as unsaved work.
 
 The top bar moves between months with arrows or a month and year picker. Its menu
 holds Manage sections, Export JSON and Sign out. Old financial data stays separate

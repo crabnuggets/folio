@@ -220,10 +220,10 @@ export function MonthlySheet({ api, signedIn, onDirty, onLogout }: { api: ApiCli
             <div className="section-heading"><div><h3>{section.name}</h3>{(section.amount_label === 'Bill amount' || section.missing_count > 0) && <span className="section-meta">{section.amount_label === 'Bill amount' && <span>Bill amounts</span>}{section.missing_count > 0 && <span className="attention">{section.missing_count} blank</span>}</span>}</div>{section.items.length > 0 && <output aria-label={`${section.name} subtotal`}>{groupAmount(moneyInput(section.total_minor, sheet.currency_exponent))}</output>}</div>
             {itemsIn(section).map(item => <ItemRow key={`${month}-${item.id}`} item={item} section={section} sheet={sheet} api={api} available={Boolean(available)} locked={locked(item.id) || locked(`${item.id}-restore`)} failed={jobs[item.id]?.status === 'failed'} feedback={detail => <>{feedback(item.id, detail)}{feedback(`${item.id}-restore`)}</>} perform={perform} markDirty={markDirty} notify={setToast} />)}
             {!itemsIn(section).length && hasEntries && <p className="empty">Nothing here this month.</p>}
-            <div className="section-actions">{addSection !== section.id && <button id={`add-${section.id}`} className="accent-button" disabled={!available || addSection !== null || failed} onClick={() => { setAddSection(section.id); markDirty('add', true); }}><Plus />Add item<span className="sr-only"> to {section.name}</span></button>}
+            <div className="section-actions">{addSection !== section.id && <button id={`add-${section.id}`} className="accent-button" disabled={!available || failed || addSection !== null && dirty.has('add')} onClick={() => setAddSection(section.id)}><Plus />Add item<span className="sr-only"> to {section.name}</span></button>}
               {section.items.some(item => item.repeat_monthly && item.amount_minor == null && item.usual_amount_minor != null) && <button className="accent-button usual-button" disabled={blocked || !available} onClick={() => void perform(`usual-${section.id}`, latest => api.command<'MonthlySheet'>(`/monthly-sheets/${month}/usual-amounts`, { section_id: section.id }, { version: latest.version }))}>Use usual amounts</button>}</div>
             {feedback(`usual-${section.id}`)}
-            {addSection === section.id && <AddItem section={section} sheet={sheet} api={api} signedIn={signedIn} perform={perform} locked={locked('add')} feedback={feedback('add')} focusItem={focusItem} close={() => { setAddSection(null); markDirty('add', false); requestAnimationFrame(() => document.getElementById(`add-${section.id}`)?.focus()); }} />}
+            {addSection === section.id && <AddItem section={section} sheet={sheet} api={api} signedIn={signedIn} perform={perform} locked={locked('add')} feedback={feedback('add')} focusItem={focusItem} onDirty={value => markDirty('add', value)} close={() => { setAddSection(null); markDirty('add', false); requestAnimationFrame(() => document.getElementById(`add-${section.id}`)?.focus()); }} />}
           </section>)}
         </div>)}</div>
         <footer>All amounts in {sheet.currency}.</footer>
@@ -348,13 +348,14 @@ function ItemRow({ item, section, sheet, api, available, locked, failed, feedbac
         const target = edited.current ? document.querySelector<HTMLElement>(`[data-discard-amount="${item.id}"]`) : document.getElementById(`item-${item.id}`);
         target?.focus(); return;
       }
-      if (event.key !== 'Enter' && event.key !== 'Tab') return;
+      // Enter and Shift+Enter move between amounts. Tab keeps page order so names and Add item stay reachable.
+      if (event.key !== 'Enter') return;
+      event.preventDefault();
       const fields = Array.from(document.querySelectorAll<HTMLInputElement>('.amount-field:not(:disabled)'));
       const next = fields[fields.indexOf(event.currentTarget) + (event.shiftKey ? -1 : 1)];
-      if (next) { event.preventDefault(); next.focus(); }
-      else if (event.key === 'Enter') { event.preventDefault(); save(true); }
+      if (next) next.focus(); else save(true);
     }} />
-      {edited.current && !locked && !reviewEdit && <div className="edit-actions"><button className={error ? undefined : 'confirm'} aria-label="Save amount" title="Save amount" onClick={() => save(true)} disabled={!available}><Check /></button><button data-discard-amount={item.id} aria-label="Discard edit" title={`Discard edit. Saved amount: ${saved}`} onClick={discard}><Close /></button></div>}
+      {edited.current && !locked && !reviewEdit && <div className="edit-actions"><button tabIndex={-1} className={error ? undefined : 'confirm'} aria-label="Save amount" title="Save amount (Enter)" onClick={() => save(true)} disabled={!available}><Check /></button><button tabIndex={-1} data-discard-amount={item.id} aria-label="Discard edit" title={`Discard edit. Saved amount: ${saved}`} onClick={discard}><Close /></button></div>}
     </div>
     {error && <div className="row-status error field-error" id={`error-${item.id}`} role="alert">{error}</div>}
     {feedback(edited.current ? `Totals still use ${item.amount_minor == null ? 'a blank amount' : formatMoney(item.amount_minor, sheet.currency, sheet.currency_exponent)}.` : undefined)}
@@ -399,13 +400,13 @@ function ItemDetails({ item, sheet, api, perform, saveEdit, disabled, blockedByA
     {repeat && <><p className="quiet switch-hint">Appears each month. Enter the amount when you know it.</p><div className="field"><label htmlFor={`${inputId}-usual`}>Usual amount</label><input id={`${inputId}-usual`} className="amount-input" inputMode="decimal" value={usual} onChange={event => { setUsual(event.target.value); changed('usual_amount_minor'); }} /><small>Optional suggestion. Existing monthly amounts stay as entered.</small></div></>}
     {error && <p className="error" role="alert">{error}</p>}
     <div className="actions details-actions"><button className="primary" disabled={Boolean(findItem(sheet, item.id)) && !changedFields.current.size}>{findItem(sheet, item.id) ? 'Save details' : 'Restore and reapply details'}</button><button type="button" onClick={cancel}>Cancel</button></div>
-    <p className="details-more-title">This month</p><div className="details-more"><button type="button" disabled={!findItem(sheet, item.id) || item.amount_minor == null} onClick={() => void perform(item.id, latest => api.command<'MonthlySheet'>(`/monthly-sheets/${sheet.month}/items/${item.id}`, { ...updateInput(findItem(latest, item.id)), amount_minor: null }, { method: 'PUT', version: latest.version }), result => { done(result); notify({ text: `Cleared ${item.name}.`, undo: 'Undo clear' }); })}>Clear amount</button><span className="quiet">Leaves this month's amount blank.</span>
-      <button type="button" disabled={!findItem(sheet, item.id)} onClick={() => void perform(item.id, latest => api.command<'MonthlySheet'>(`/monthly-sheets/${sheet.month}/items/${item.id}/remove`, {}, { version: latest.version }), result => { done(result); notify({ text: `Skipped ${item.name} this month.`, undo: 'Undo skip' }); })}>Skip this month</button><span className="quiet">Removes it from this month only. History stays saved.</span>
+    <p className="details-more-title">This month</p>{changedFields.current.size > 0 && <p className="quiet switch-hint">Save or cancel your changes above first. These actions apply right away.</p>}<div className="details-more"><button type="button" disabled={!findItem(sheet, item.id) || item.amount_minor == null || changedFields.current.size > 0} onClick={() => void perform(item.id, latest => api.command<'MonthlySheet'>(`/monthly-sheets/${sheet.month}/items/${item.id}`, { ...updateInput(findItem(latest, item.id)), amount_minor: null }, { method: 'PUT', version: latest.version }), result => { done(result); notify({ text: `Cleared ${item.name}.`, undo: 'Undo clear' }); })}>Clear amount</button><span className="quiet">Leaves this month's amount blank.</span>
+      <button type="button" disabled={!findItem(sheet, item.id) || changedFields.current.size > 0} onClick={() => void perform(item.id, latest => api.command<'MonthlySheet'>(`/monthly-sheets/${sheet.month}/items/${item.id}/remove`, {}, { version: latest.version }), result => { done(result); notify({ text: `Skipped ${item.name} this month.`, undo: 'Undo skip' }); })}>Skip this month</button><span className="quiet">Removes it from this month only. History stays saved.</span>
     </div>
   </fieldset></form></div>;
 }
-function AddItem({ section, sheet, api, signedIn, perform, locked, feedback, close, focusItem }: {
-  section: Section; sheet: Sheet; api: ApiClient; signedIn: boolean; perform: Perform; locked: boolean; feedback: React.ReactNode; close(): void; focusItem(id: string): void;
+function AddItem({ section, sheet, api, signedIn, perform, locked, feedback, close, focusItem, onDirty }: {
+  section: Section; sheet: Sheet; api: ApiClient; signedIn: boolean; perform: Perform; locked: boolean; feedback: React.ReactNode; close(): void; focusItem(id: string): void; onDirty(value: boolean): void;
 }) {
   const id = useId();
   const formElement = useRef<HTMLFormElement>(null);
@@ -420,6 +421,9 @@ function AddItem({ section, sheet, api, signedIn, perform, locked, feedback, clo
   const [showSuggestions, setShowSuggestions] = useState(true);
   const [active, setActive] = useState(-1);
   const [error, setError] = useState('');
+  // An untouched form holds nothing to lose, so it must not block months, undo or other sections.
+  const hasContent = Boolean(name.trim() || value.trim());
+  useEffect(() => { onDirty(hasContent); }, [hasContent]);
   const suggestions = useQuery({ queryKey: ['monthly-suggestions', sheet.month, section.id, name, sheet.version], queryFn: () => api.get<'MonthlyItemSuggestions'>(`/monthly-item-suggestions?month=${sheet.month}&section_id=${section.id}&q=${encodeURIComponent(name)}`), enabled: signedIn && showSuggestions && !selected && !locked });
   // Before anything is typed, offer only names that can actually be added again.
   const matches = showSuggestions && !selected ? (suggestions.data?.items ?? []).filter(item => name.trim() || !item.current_month_item_id) : [];
@@ -455,7 +459,7 @@ function AddItem({ section, sheet, api, signedIn, perform, locked, feedback, clo
       if (event.key === 'ArrowUp' && matches.length) { event.preventDefault(); setActive(index => (index + matches.length - 1) % matches.length); }
       if (event.key === 'Enter' && active >= 0 && matches[active]) { event.preventDefault(); select(matches[active]); }
     }} />
-      {matches.length > 0 && <div className="suggestions-pop"><ul className="suggestions" role="listbox" id={`${id}-suggestions`} aria-label="Saved items">{matches.map((item, index) => <li key={item.id} role="option" id={`${id}-option-${index}`} aria-selected={active === index} onPointerDown={event => event.preventDefault()} onClick={() => select(item)}>{item.name}<small>{item.section_name}{item.current_month_item_id ? ' · Already in this month' : item.repeat_monthly ? ' · Monthly' : ''}</small></li>)}</ul>
+      {matches.length > 0 && <div className="suggestions-pop"><ul className="suggestions" role="listbox" id={`${id}-suggestions`} aria-label="Saved items">{matches.map((item, index) => <li key={item.id} role="option" id={`${id}-option-${index}`} aria-selected={active === index} onPointerDown={event => event.preventDefault()} onClick={() => select(item)}>{item.name}<small><span>{item.section_name}</span>{item.current_month_item_id ? <span>Already in this month</span> : item.repeat_monthly && <span>Monthly</span>}</small></li>)}</ul>
       <button className="quiet-button dismiss-suggestions" type="button" onClick={() => setShowSuggestions(false)}>Dismiss suggestions</button></div>}
       {suggestions.isError && <small>Saved names could not be loaded. You can still type a name.</small>}
     </div>
