@@ -187,7 +187,7 @@ export function TransactionChat({ api, signedIn, month, sheet, available, unavai
         const section = sheet?.sections.find(section => section.id === item.section_id);
         const duplicate = isDuplicate(item);
         const itemLocked = locked(item.key);
-        return <form key={item.key} className="chat-proposal" aria-label={`Suggested item ${index + 1}`} onSubmit={async event => {
+        return <form key={item.key} className="chat-proposal" onFocusCapture={() => { resolvedIndex.current = index; }} aria-label={`Suggested item ${index + 1}`} onSubmit={async event => {
           event.preventDefault(); setError('');
           if (!sheet || duplicate || !ready || itemLocked) return;
           resolvedIndex.current = index;
