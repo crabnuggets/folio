@@ -55,7 +55,7 @@ export function TransactionChat({ api, signedIn, month, sheet, available, unavai
     if (!root.current || document.activeElement !== document.body && !root.current.contains(document.activeElement)) return;
     const forms = root.current.querySelectorAll<HTMLElement>('.chat-proposal');
     const target = forms[Math.min(resolvedIndex.current, forms.length - 1)]?.querySelector<HTMLElement>('button:not(:disabled)')
-      ?? root.current.querySelector<HTMLElement>('.chat-review-bar button:not(:disabled)') ?? document.getElementById(`${id}-text`);
+      ?? root.current.querySelector<HTMLElement>('.chat-review-bar button:not(:disabled)') ?? root.current.querySelector<HTMLElement>('.chat-panel-heading button') ?? document.getElementById(`${id}-text`);
     target?.focus();
   };
   // Collapsing a pending review hands focus to Review; reopening returns it to the suggestion last in use.
@@ -211,7 +211,8 @@ export function TransactionChat({ api, signedIn, month, sheet, available, unavai
         {!expanded && <button type="button" className="primary" onClick={() => setExpanded(true)}>Review</button>}
         {expanded && proposals.length > 1 && <><button type="button" className="quiet-button" disabled={busy || adding || proposals.some(item => locked(item.key))} onClick={() => setProposals([])}>Discard all</button>{(adding || proposals.some(item => !isDuplicate(item))) && <button type="button" className="primary" disabled={!ready || busy || adding || proposals.some(item => locked(item.key))} onClick={async () => {
           setError(''); setAdding(true);
-          try { for (const item of proposals) if (!isDuplicate(item) && !await addProposal(item)) break; }
+          let kept = 0; // Position of the item being added among those still listed, so a failure keeps focus on it.
+          try { for (const item of proposals) { if (isDuplicate(item)) { kept++; continue; } resolvedIndex.current = kept; if (!await addProposal(item)) break; } }
           catch (error) { setError(errorMessage(error)); }
           finally { setAdding(false); requestAnimationFrame(focusReview); }
         }}>{adding ? 'Adding…' : (count => count === 1 ? 'Add 1 item' : `Add ${count} items`)(proposals.filter(item => !isDuplicate(item)).length)}</button>}</>}</div> : <>

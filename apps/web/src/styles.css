@@ -271,7 +271,7 @@ dialog::backdrop { background:#10151466; }
 .bottom-stack { position:fixed; z-index:15; left:0; right:0; bottom:0; display:flex; flex-direction:column; align-items:center; padding:8px 16px max(16px,env(safe-area-inset-bottom)); pointer-events:none; }
 .bottom-stack>* { pointer-events:auto; }
 /* Soft frosted fade so content scrolling under the floating composer never shows raw, cut-off text. */
-.bottom-stack::before { content:''; position:absolute; z-index:-1; inset:-12px 0 0; pointer-events:none; background:linear-gradient(to top,var(--glass-solid) calc(100% - 20px),transparent); -webkit-backdrop-filter:blur(12px); backdrop-filter:blur(12px); -webkit-mask-image:linear-gradient(to top,#000 calc(100% - 20px),transparent); mask-image:linear-gradient(to top,#000 calc(100% - 20px),transparent); }
+.bottom-stack::before { content:''; position:absolute; z-index:-1; inset:-12px 0 0; pointer-events:none; background:linear-gradient(to top,var(--glass-solid) calc(100% - 20px),transparent); -webkit-backdrop-filter:blur(16px); backdrop-filter:blur(16px); -webkit-mask-image:linear-gradient(to top,#000 calc(100% - 20px),transparent); mask-image:linear-gradient(to top,#000 calc(100% - 20px),transparent); }
 .toast { position:absolute; z-index:2; bottom:calc(100% + 8px); display:flex; align-items:center; gap:8px; max-width:min(600px,calc(100% - 32px)); padding:6px 6px 6px 16px; border-radius:var(--radius); background:var(--text); color:var(--canvas); box-shadow:var(--shadow-float); font-size:.875rem; }
 .toast-text { padding:4px 8px 4px 0; overflow-wrap:anywhere; }
 .toast button { min-height:32px; padding:4px 10px; border-color:transparent; background:transparent; color:inherit; font-size:.875rem; white-space:nowrap; }
