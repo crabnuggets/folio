@@ -120,7 +120,8 @@ export function MonthlySheet({ api, signedIn, onDirty, onLogout }: { api: ApiCli
   useEffect(() => { onDirty(blocked); }, [blocked]);
   useEffect(() => {
     if (!summaryElement || typeof IntersectionObserver === 'undefined') { setSummaryVisible(true); return; }
-    const observer = new IntersectionObserver(([entry]) => setSummaryVisible(entry.isIntersecting), { rootMargin: '-72px 0px 0px' });
+    // Hand over to the compact remainder as soon as the large number starts to pass under the top bar.
+    const observer = new IntersectionObserver(([entry]) => setSummaryVisible(entry.intersectionRatio >= 0.99), { rootMargin: '-72px 0px 0px', threshold: [0, 0.99] });
     observer.observe(summaryElement);
     return () => observer.disconnect();
   }, [summaryElement]);
@@ -336,7 +337,7 @@ function ItemRow({ item, section, sheet, api, available, locked, failed, feedbac
   const discard = () => { edited.current = false; markDirty(item.id, false); setValue(moneyInput(item.amount_minor, sheet.currency_exponent)); setError(''); requestAnimationFrame(() => document.getElementById(`item-${item.id}`)?.focus()); };
   const closeDetails = () => { detailsDirty.current = false; setDetails(false); requestAnimationFrame(() => { if (document.activeElement === document.body) document.getElementById(`item-${item.id}`)?.focus(); }); };
   return <div className={`sheet-row ${details ? 'is-open' : ''}`} data-item={item.id}>
-    <div className="item-cell"><button id={`item-${item.id}`} className="item-name" aria-expanded={details} title={details ? undefined : 'Edit details'} onClick={event => { if (!details) { openedByTouch.current = event.detail > 0 && Boolean(window.matchMedia?.('(pointer: coarse)').matches); setDetails(true); } else if (!detailsDirty.current) closeDetails(); }}><span className="item-label">{item.name}{item.repeat_monthly && <>{' '}<span className="monthly-label">Monthly</span></>}</span><ChevronDown /></button>
+    <div className="item-cell"><button id={`item-${item.id}`} className="item-name" aria-expanded={details} title={details ? undefined : 'Edit details'} onClick={event => { if (!details) { openedByTouch.current = event.detail > 0 && Boolean(window.matchMedia?.('(pointer: coarse)').matches); setDetails(true); } else if (!detailsDirty.current) closeDetails(); }}><ChevronRight /><span className="item-label"><span className="item-text">{item.name}</span>{item.repeat_monthly && <>{' '}<span className="monthly-label">Monthly</span></>}</span></button>
       {item.note && !details && <span className="item-note">{item.note}</span>}</div>
     <div className="amount-cell"><label className="sr-only" htmlFor={`amount-${item.id}`}>{section.amount_label} for {item.name}</label><input id={`amount-${item.id}`} ref={amountInput} className={`amount-field ${failed ? 'is-unconfirmed' : ''} ${reviewEdit ? 'is-review' : ''}`} inputMode="decimal" autoComplete="off" value={focused || edited.current ? value : groupAmount(value)} placeholder={item.usual_amount_minor != null && item.repeat_monthly ? `Usual ${moneyInput(item.usual_amount_minor, sheet.currency_exponent)}` : 'Add amount'} disabled={locked} aria-invalid={Boolean(error) || undefined} aria-describedby={error ? `error-${item.id}` : undefined} onChange={event => {
       if (!edited.current) editedFrom.current = item.amount_minor;
