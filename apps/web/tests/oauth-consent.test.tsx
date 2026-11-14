@@ -37,3 +37,11 @@ it('refuses to approve an unregistered OAuth client', async () => {
   expect(screen.queryByRole('button', { name: 'Allow monthly sheets and proposals' })).toBeNull();
   expect(approve).not.toHaveBeenCalled();
 });
+
+it('shows the provider error when an authorization request cannot be loaded', async () => {
+  const client = new AuthClient({ url: 'https://auth.example/auth/v1', persistSession: false, autoRefreshToken: false, detectSessionInUrl: false });
+  vi.spyOn(client.oauth, 'getAuthorizationDetails').mockResolvedValue({ data: null, error: new AuthApiError('authorization request cannot be processed', 400, 'validation_failed') });
+  window.history.replaceState(null, '', '/oauth/consent?authorization_id=used');
+  render(<OAuthConsent client={client} clientID="registered-client" onLogout={() => {}} />);
+  expect((await screen.findByRole('alert')).textContent).toContain('authorization request cannot be processed');
+});
