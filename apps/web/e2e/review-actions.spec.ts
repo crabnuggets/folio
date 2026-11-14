@@ -1,4 +1,4 @@
-import { test, expect, signIn, addItem } from './fixtures';
+import { test, expect, signIn, addItem, openMenu } from './fixtures';
 
 if (process.env.FOLIO_CAPTURE_DIR) test.use({ video: 'on' });
 
@@ -21,14 +21,37 @@ test('clear and remove offer Undo, details preserve notes and rename, custom sec
   await page.getByRole('button', { name: 'Redo', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Redo', exact: true })).toBeDisabled();
   await page.getByRole('button', { name: 'Undo', exact: true }).click(); await expect(renamed).toHaveValue('120.25');
-  await page.getByText('Sheet options', { exact: true }).click();
-  await page.getByRole('textbox', { name: 'Section name' }).fill('Family'); await page.getByRole('combobox', { name: 'Side' }).selectOption('out');
-  await page.getByRole('button', { name: 'Add section', exact: true }).click(); await expect(page.getByRole('region', { name: 'Family', exact: true })).toBeVisible();
+  await openMenu(page); await page.getByRole('button', { name: 'Manage sections', exact: true }).click();
+  await page.getByRole('textbox', { name: 'Section name' }).fill('Family'); await page.getByRole('combobox', { name: 'Money in or money out' }).selectOption('out');
+  await page.getByRole('button', { name: 'Add section', exact: true }).click(); await expect(page.getByRole('textbox', { name: 'Family', exact: true })).toBeVisible();
+  await expect(page.getByRole('textbox', { name: 'Section name' })).toHaveValue('');
   const cardsRename = page.getByRole('textbox', { name: 'Credit cards', exact: true }); await cardsRename.fill('Card bills');
   await cardsRename.locator('..').locator('..').getByRole('button', { name: 'Rename' }).click();
-  await expect(page.getByRole('region', { name: 'Card bills', exact: true })).toBeVisible();
+  await expect(page.getByRole('textbox', { name: 'Card bills', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Close dialog', exact: true }).click();
+  await expect(page.getByRole('region', { name: 'Family', exact: true })).toBeVisible(); await expect(page.getByRole('region', { name: 'Card bills', exact: true })).toBeVisible();
   await expect(page.getByLabel('Bill amount for Daily card', { exact: true })).toBeVisible(); await expect(row).toHaveCount(0);
-  if (process.env.FOLIO_CAPTURE_DIR) { await page.getByText('Sheet options', { exact: true }).click(); await page.evaluate(() => window.scrollTo(0, 0)); }
+  if (process.env.FOLIO_CAPTURE_DIR) await page.evaluate(() => window.scrollTo(0, 0));
   if (process.env.FOLIO_CAPTURE_DIR) await page.screenshot({ path: process.env.FOLIO_CAPTURE_DIR + '/' + testInfo.project.name + '.png', fullPage: true });
   const sheet = await backend.get<'MonthlySheet'>('/monthly-sheets/2026-10'); expect(sheet.sections.flatMap(section => section.items)[0].note).toBe('Includes the refund already.');
+});
+
+test('an untouched add form blocks nothing, and unsaved details hold Clear and Skip', async ({ page, backend }) => {
+  await backend.add('Salary', '10000'); await signIn(page);
+  const month = page.getByRole('button', { name: /^Month:/ });
+  await page.getByRole('button', { name: 'Add item to Income', exact: true }).click();
+  await expect(month).toBeEnabled();
+  await page.getByRole('button', { name: 'Add item to Other money in', exact: true }).click();
+  await expect(page.getByRole('form', { name: 'Add item to Income' })).toHaveCount(0);
+  const form = page.getByRole('form', { name: 'Add item to Other money in' });
+  await form.getByRole('combobox', { name: 'Name', exact: true }).fill('Refund');
+  await expect(month).toBeDisabled(); await expect(page.getByRole('button', { name: 'Add item to Income', exact: true })).toBeDisabled();
+  await form.getByRole('button', { name: 'Cancel', exact: true }).click(); await expect(month).toBeEnabled();
+  await page.getByRole('button', { name: 'Salary', exact: true }).click();
+  const clear = page.getByRole('button', { name: 'Clear amount', exact: true }); const skip = page.getByRole('button', { name: 'Skip this month', exact: true });
+  await expect(clear).toBeEnabled(); await expect(skip).toBeEnabled();
+  await page.getByLabel('Notes', { exact: true }).fill('Draft note');
+  await expect(clear).toBeDisabled(); await expect(skip).toBeDisabled();
+  await page.getByRole('button', { name: 'Save details', exact: true }).click();
+  await expect(page.getByText('Draft note', { exact: true })).toBeVisible();
 });

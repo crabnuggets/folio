@@ -1,4 +1,4 @@
-import { test, expect, signIn, selectMonth, addItem, month, sectionIds, noHorizontalOverflow } from './fixtures';
+import { test, expect, signIn, selectMonth, addItem, openMenu, month, sectionIds, noHorizontalOverflow } from './fixtures';
 
 test('one monthly sheet accounts for a complete synthetic month and exports server state', async ({ page, backend }, testInfo) => {
   await signIn(page);
@@ -19,6 +19,7 @@ test('one monthly sheet accounts for a complete synthetic month and exports serv
   await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({ path: testInfo.outputPath('monthly-sheet.png'), fullPage: true });
   await expect(page.getByRole('button', { name: 'Settings', exact: true })).toHaveCount(0);
+  await openMenu(page);
   const downloadPromise = page.waitForEvent('download');
   await page.getByRole('banner').getByRole('button', { name: 'Export JSON', exact: true }).click();
   const download = await downloadPromise; expect(download.suggestedFilename()).toMatch(/^folio-export-.*\.json$/);
@@ -35,12 +36,12 @@ test('recurring names start blank, usual amounts respect edits and zero, skip di
   const zero = page.getByLabel('Amount for Zero allowance', { exact: true });
   const card = page.getByLabel('Bill amount for Everyday card', { exact: true });
   await expect(savings).toHaveValue(''); await expect(card).toHaveValue('');
-  await expect(page.getByRole('region', { name: 'Monthly summary' })).toContainText('3 items still blank');
+  await expect(page.getByRole('region', { name: 'Monthly summary' })).toContainText('Totals leave out 3 blank items');
   await zero.fill('0'); await zero.press('Enter');
-  await expect(page.getByLabel('Month', { exact: true })).toBeEnabled();
+  await expect(page.getByRole('button', { name: /^Month:/ })).toBeEnabled();
   await page.getByRole('button', { name: 'Use usual amounts', exact: true }).click();
   await expect(savings).toHaveValue('900.00'); await expect(zero).toHaveValue('0.00'); await expect(card).toHaveValue('');
-  await expect(page.getByRole('region', { name: 'Monthly summary' })).toContainText('1 item still blank');
+  await expect(page.getByRole('region', { name: 'Monthly summary' })).toContainText('Totals leave out 1 blank item');
   await page.getByRole('button', { name: 'Everyday card Monthly', exact: true }).click();
   await page.getByRole('button', { name: 'Skip this month', exact: true }).click();
   await expect(card).toHaveCount(0);
@@ -49,8 +50,9 @@ test('recurring names start blank, usual amounts respect edits and zero, skip di
   await page.getByRole('button', { name: 'Skip this month', exact: true }).click();
   await selectMonth(page, '2026-12'); await expect(card).toHaveValue('');
   await page.getByRole('button', { name: 'House savings Monthly', exact: true }).click();
-  await page.getByRole('button', { name: 'Stop repeating', exact: true }).click();
-  await expect(page.getByLabel('Month', { exact: true })).toBeEnabled();
+  await page.getByRole('switch', { name: 'Repeat monthly' }).uncheck();
+  await page.getByRole('button', { name: 'Save details', exact: true }).click();
+  await expect(page.getByRole('button', { name: /^Month:/ })).toBeEnabled();
   await selectMonth(page, '2027-01'); await expect(savings).toHaveCount(0); await expect(card).toBeVisible();
   const october = await backend.get<'MonthlySheet'>(`/monthly-sheets/${month}`);
   expect(october.sections.flatMap(section => section.items).find(item => item.name === 'House savings')?.amount_minor).toBe('90000');

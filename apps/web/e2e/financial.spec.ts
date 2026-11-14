@@ -30,7 +30,7 @@ test('history suggestions retain typed amount and saved preferences, support key
   await form.getByRole('combobox', { name: 'Name' }).fill('house');
   await form.getByRole('option', { name: /House savings/ }).click();
   await expect(form.getByRole('switch', { name: 'Repeat monthly' })).toBeChecked();
-  await expect(form.getByLabel('Suggest this amount each month')).toBeChecked();
+  await expect(form.getByLabel('Make this the usual amount')).toBeChecked();
   await expect(form.getByLabel('Amount', { exact: true })).toHaveValue('');
   await form.getByLabel('Amount', { exact: true }).fill('925');
   await form.getByRole('button', { name: 'Save item' }).click(); await expect(form).toHaveCount(0);
@@ -65,7 +65,7 @@ test('explicitly suggesting the entered amount replaces a historical usual amoun
   await section.getByRole('button', { name: 'Add item to Recurring expenses' }).click();
   const form = section.getByRole('form'); await form.getByRole('combobox', { name: 'Name' }).fill('Allow');
   await form.getByRole('option', { name: /Allowance/ }).click(); await form.getByLabel('Amount', { exact: true }).fill('135');
-  const usual = form.getByLabel('Suggest this amount each month'); await expect(usual).toBeChecked(); await usual.uncheck(); await usual.check();
+  const usual = form.getByLabel('Make this the usual amount'); await expect(usual).toBeChecked(); await usual.uncheck(); await usual.check();
   await form.getByRole('button', { name: 'Save item' }).click(); await expect(form).toHaveCount(0);
   const saved = await backend.get<'MonthlySheet'>('/monthly-sheets/2026-10');
   expect(saved.sections.flatMap(section => section.items)[0]).toMatchObject({ amount_minor: '13500', usual_amount_minor: '13500', repeat_monthly: true });

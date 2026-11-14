@@ -15,7 +15,7 @@ it('retains a committed payment when linking times out, and retries only the exa
     .mockResolvedValue(json({ id: 'settlement', entry_id: 'retained-payment' }));
   const api = new ApiClient(transport); api.setToken('owner');
   const workflow = settlementWorkflow(api, statement, '120000', payment);
-  await expect(workflow.run()).rejects.toThrow('outcome is unknown');
+  await expect(workflow.run()).rejects.toThrow("Couldn't confirm");
   expect(workflow.paymentId).toBe('retained-payment');
   await workflow.run();
   expect(transport.mock.calls.map(call => call[0])).toEqual(['/api/v1/entries', '/api/v1/statements/card-statement/settlements', '/api/v1/statements/card-statement/settlements']);
@@ -50,7 +50,7 @@ it('clears resolved payment uncertainty when recovered cash reaches a definitive
     .mockResolvedValueOnce(json({ error: { code: 'STALE_VERSION', message: 'stale' } }, 412));
   const api = new ApiClient(transport); api.setToken('owner');
   const workflow = settlementWorkflow(api, statement, '120000', payment);
-  await expect(workflow.run()).rejects.toThrow('outcome is unknown');
+  await expect(workflow.run()).rejects.toThrow("Couldn't confirm");
   expect(workflow).toHaveProperty('uncertain', true);
   await expect(workflow.run()).rejects.toMatchObject({ status: 412 });
   expect(workflow).toHaveProperty('paymentId', 'recovered-payment');
@@ -66,7 +66,7 @@ it('keeps a lost link outcome uncertain across a later definitive rejection', as
     .mockResolvedValueOnce(json({ id: 'recovered-settlement' }));
   const api = new ApiClient(transport); api.setToken('owner');
   const workflow = settlementWorkflow(api, statement, '120000', payment);
-  await expect(workflow.run()).rejects.toThrow('outcome is unknown');
+  await expect(workflow.run()).rejects.toThrow("Couldn't confirm");
   await expect(workflow.run()).rejects.toMatchObject({ status: 412 });
   expect(workflow).toHaveProperty('uncertain', true);
   await workflow.run();

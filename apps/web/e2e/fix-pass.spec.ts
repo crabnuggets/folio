@@ -9,19 +9,20 @@ for (const keyboard of [false, true]) test(`discard amount without a mutation us
   await field.fill('123');
   const discard = page.getByRole('button', { name: 'Discard edit', exact: true });
   if (keyboard) { await field.press('Escape'); await expect(discard).toBeFocused(); await page.keyboard.press('Enter'); } else await discard.click();
-  await expect(field).toHaveValue('100.00'); await expect(page.getByLabel('Month', { exact: true })).toBeEnabled();
+  await expect(field).toHaveValue('100.00'); await expect(page.getByRole('button', { name: /^Month:/ })).toBeEnabled();
   expect(writes).toEqual([]);
   await field.fill('124'); await page.getByRole('heading', { name: 'Monthly remainder' }).click();
-  await expect(page.getByLabel('Month', { exact: true })).toBeEnabled();
+  await expect(page.getByRole('button', { name: /^Month:/ })).toBeEnabled();
   expect((await backend.get<'MonthlySheet'>(`/monthly-sheets/${month}`)).money_in_minor).toBe('12400');
 });
 
-test('amount Tab traverses both ways, exits boundaries, and returns to item options', async ({ page, backend }) => {
+test('amount Enter traverses both ways, Tab keeps page order, and Escape returns to item options', async ({ page, backend }) => {
   await backend.add('Salary', '10000'); await backend.add('Refund', '2000', sectionIds.otherIn); await signIn(page);
   const first = page.getByLabel('Amount for Salary', { exact: true }); const last = page.getByLabel('Amount for Refund', { exact: true });
   await first.focus(); await first.press('Shift+Tab'); await expect(page.getByRole('button', { name: 'Salary', exact: true })).toBeFocused();
-  await first.fill('101'); await first.press('Tab'); await expect(last).toBeFocused();
-  await expect(first).toBeEnabled(); await last.fill('21'); await last.press('Shift+Tab'); await expect(first).toBeFocused();
+  await first.press('Tab'); await expect(page.getByRole('button', { name: 'Add item to Income', exact: true })).toBeFocused();
+  await first.fill('101'); await first.press('Enter'); await expect(last).toBeFocused();
+  await expect(first).toBeEnabled(); await last.fill('21'); await last.press('Shift+Enter'); await expect(first).toBeFocused();
   await expect(last).toBeEnabled(); await first.press('Escape'); await expect(page.getByRole('button', { name: 'Salary', exact: true })).toBeFocused();
   await page.keyboard.press('Enter'); await expect(page.getByLabel('Name', { exact: true })).toBeFocused();
   await page.keyboard.press('Tab'); await expect(page.getByLabel('Notes', { exact: true })).toBeFocused();
@@ -37,7 +38,7 @@ test('amount Tab traverses both ways, exits boundaries, and returns to item opti
 
 test('closing details does not overwrite a newer focus target', async ({ page, backend }) => {
   await backend.add('Salary', '10000'); await signIn(page);
-  await page.getByRole('button', { name: 'Salary', exact: true }).click();
+  await page.getByRole('button', { name: 'Salary', exact: true }).focus(); await page.keyboard.press('Enter');
   await expect(page.getByLabel('Name', { exact: true })).toBeFocused();
   // Hold the close callback until the user has moved focus elsewhere.
   await page.evaluate(() => {
@@ -98,7 +99,7 @@ for (const changed of ['removed', 'relocated'] as const) test(`compare retains $
   await expect(otherRow.getByLabel('Notes', { exact: true })).toHaveValue('Other unsaved draft');
   await salaryRow.getByRole('button', { name: changed === 'removed' ? 'Restore and reapply details' : 'Save details', exact: true }).click();
   const refundRow = page.locator('.sheet-row').filter({ has: refund }); await refundRow.getByRole('button', { name: 'Discard edit', exact: true }).click();
-  await otherRow.getByRole('button', { name: 'Save details', exact: true }).click(); await expect(page.getByLabel('Month', { exact: true })).toBeEnabled();
+  await otherRow.getByRole('button', { name: 'Save details', exact: true }).click(); await expect(page.getByRole('button', { name: /^Month:/ })).toBeEnabled();
   const saved = await backend.get<'MonthlySheet'>(`/monthly-sheets/${month}`);
   expect(saved.sections.flatMap(section => section.items).find(item => item.name === 'Salary renamed')).toMatchObject({ note: 'Concurrent note', amount_minor: '10000' });
   expect(saved.sections.flatMap(section => section.items).find(item => item.name === 'Other')).toMatchObject({ note: 'Other unsaved draft' });
@@ -108,13 +109,13 @@ test('SGD is fixed before amounts and in empty later months with separate month 
   await signIn(page);
   const change = page.getByRole('button', { name: 'Change currency', exact: true }); await expect(change).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Settings', exact: true })).toHaveCount(0);
-  await expect(page.getByRole('region', { name: 'Monthly summary' })).toContainText('SGD 0.00');
-  const monthSelect = page.getByRole('button', { name: 'Month', exact: true });
-  await expect(monthSelect).toContainText('October'); await monthSelect.click(); await expect(page.getByRole('group', { name: 'Choose month' }).getByRole('button')).toHaveCount(12); await monthSelect.press('Escape');
-  const year = page.getByRole('spinbutton', { name: 'Year', exact: true }); await expect(year).toHaveValue('2026');
-  await year.fill('1899'); await year.press('Enter'); await expect(year).toHaveValue('2026');
+  await expect(page.getByRole('region', { name: 'Monthly summary' })).toContainText('SGD —');
+  const monthSelect = page.getByRole('button', { name: /^Month:/ });
+  await expect(monthSelect).toHaveText('October 2026'); await monthSelect.click(); await expect(page.getByRole('group', { name: 'Choose month' }).getByRole('button')).toHaveCount(12); await monthSelect.press('Escape');
+  await page.getByRole('button', { name: 'Next month', exact: true }).click(); await expect(monthSelect).toHaveText('November 2026'); await expect(monthSelect).toBeEnabled();
+  await page.getByRole('button', { name: 'Previous month', exact: true }).click(); await expect(monthSelect).toHaveText('October 2026'); await expect(monthSelect).toBeEnabled();
   await backend.add('Salary', '0'); await page.reload(); await signIn(page);
-  await selectMonth(page, '2027-01'); await expect(monthSelect).toContainText('January'); await expect(year).toHaveValue('2027');
+  await selectMonth(page, '2027-01'); await expect(monthSelect).toHaveText('January 2027');
   await expect(page.getByRole('region', { name: 'Income', exact: true })).toBeVisible(); await expect(change).toHaveCount(0);
   const later = await backend.get<'MonthlySheet'>('/monthly-sheets/2027-01'); expect(later.currency).toBe('SGD'); expect(later.currency_locked).toBe(true); expect(later.sections.flatMap(section => section.items)).toHaveLength(0);
 });
@@ -133,7 +134,7 @@ for (const changed of ['removed', 'relocated'] as const) for (const action of ['
   const row = page.locator(`[data-item="${id}"]`);
   if (action === 'discard') await row.getByRole('button', { name: 'Discard edit', exact: true }).click();
   else await row.getByRole('button', { name: changed === 'removed' ? 'Restore and reapply amount' : 'Save amount', exact: true }).click();
-  await expect(page.getByLabel('Month', { exact: true })).toBeEnabled();
+  await expect(page.getByRole('button', { name: /^Month:/ })).toBeEnabled();
   const saved = await backend.get<'MonthlySheet'>(`/monthly-sheets/${month}`); const savedItem = saved.sections.flatMap(section => section.items).find(row => row.id === id);
   if (changed === 'removed' && action === 'discard') expect(savedItem).toBeUndefined();
   else expect(savedItem).toMatchObject({ amount_minor: action === 'reapply' ? '11100' : '10000', note: 'Concurrent note', section_id: changed === 'relocated' ? sectionIds.otherIn : item.section_id });
@@ -151,11 +152,11 @@ test('noncommitted 503 then exact retry 412 releases uncertainty for comparison'
     await route.continue();
   });
   const field = page.getByLabel('Amount for Salary', { exact: true }); await field.fill('111'); await field.press('Tab');
-  await expect(page.getByRole('button', { name: 'Retry same action' })).toBeVisible(); await expect(page.getByRole('button', { name: 'Compare latest' })).toHaveCount(0);
-  await backend.add('Concurrent', '100'); await page.getByRole('button', { name: 'Retry same action' }).click();
+  await expect(page.getByRole('button', { name: 'Try again' })).toBeVisible(); await expect(page.getByRole('button', { name: 'Compare latest' })).toHaveCount(0);
+  await backend.add('Concurrent', '100'); await page.getByRole('button', { name: 'Try again' }).click();
   await expect(page.getByRole('button', { name: 'Compare latest' })).toBeVisible(); expect(attempts[1]).toEqual(attempts[0]);
   await page.getByRole('button', { name: 'Compare latest' }).click(); await expect(field).toHaveValue('111');
-  await page.getByRole('button', { name: 'Save amount', exact: true }).click(); await expect(page.getByLabel('Month', { exact: true })).toBeEnabled();
+  await page.getByRole('button', { name: 'Save amount', exact: true }).click(); await expect(page.getByRole('button', { name: /^Month:/ })).toBeEnabled();
   expect(attempts[2].key).not.toBe(attempts[0].key);
 });
 

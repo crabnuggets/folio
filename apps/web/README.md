@@ -29,25 +29,31 @@ Credit cards use Bill amount. Saved history suggests names without copying prior
 amounts. Repeat monthly is optional and off for new names. Fixed recurring amounts
 can have a usual suggestion; applying suggestions fills only blank rows.
 
-Edit a row's amount directly. Blur or Enter saves; Tab and Enter move between
-amounts. Shift+Tab moves to the previous amount; Tab exits normally at either
-boundary. Escape focuses Discard edit for an unsaved amount, or the item name
+Edit a row's amount directly. Blur or Enter saves. Enter moves to the next
+amount and Shift+Enter to the previous one. Tab follows page order, so item
+names and Add item stay reachable. Escape focuses Discard edit for an unsaved amount, or the item name
 otherwise. Enter on the item name opens and focuses details. Blank differs from
 an explicit zero. Details contain notes, rename, recurrence and usual amounts.
-Skip this month retains history and recurrence; Stop repeating ends future
-automatic rows. Clear and skip offer Undo.
+Skip this month retains history and recurrence; turning off Repeat monthly ends
+future automatic rows. Clear and skip offer Undo, and wait until
+unsaved detail changes are saved or cancelled. An untouched Add item form does
+not count as unsaved work.
 
-Sheet options add or rename sections. Settings contains currency, export and
-sign-out. Old financial data stays separate and remains in the lossless export.
-The monthly remainder is entered money in minus entered money out, not a bank
-balance or a measure of consumption.
+The top bar moves between months with arrows or a month and year picker. Its menu
+holds Manage sections, Export JSON and Sign out. Old financial data stays separate
+and remains in the lossless export. The monthly remainder is entered money in minus
+entered money out, not a bank balance or a measure of consumption.
+
+Chat stays docked at the bottom of the sheet. Focus it to connect ChatGPT or review
+what it found. Suggestions never reach the sheet until you add them, one at a time
+or all together.
 
 ## Saving and recovery
 
 The client serializes monthly writes because one version covers all monthly
 sheets. Each submitted write retains an immutable body, retry key and precondition.
 Saving, saved and failed states appear beside the affected row or form. An
-uncertain write blocks subsequent writes until Retry same action recovers it.
+uncertain write blocks subsequent writes until Try again recovers it.
 A stale precondition offers Compare latest, retaining the typed edit for an
 explicit fresh save. The app never silently replaces a stale command's version.
 
@@ -76,6 +82,7 @@ responses, stale versions, history, recurrence, export, keyboard focus and 320px
 reflow. See [e2e/README.md](e2e/README.md). Do not run concurrent browser suites
 against its one resettable store.
 
-The first version uses a light theme, locally bundled Inter, solid financial
-surfaces, visible focus and 44px controls. Hosted auth, import/migration, restore,
-Android changes and durable offline writes are outside this frontend change.
+The interface follows the system light or dark preference, uses locally bundled
+Inter and solid financial surfaces, shows visible focus, and gives touch pointers
+44px controls. Hosted auth, import/migration, restore, Android changes and durable
+offline writes are outside this frontend change.
