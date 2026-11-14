@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 
 export function Brand() {
-  return <div className="brand"><svg className="brand-mark" aria-hidden="true" viewBox="0 0 32 32" width="28" height="28"><rect width="32" height="32" rx="8" fill="currentColor" /><path d="M8 11h9M21 11h3M8 16h9M21 16h3M8 21h9M21 21h3" stroke="var(--on-accent)" strokeWidth="2" strokeLinecap="round" /></svg>Folio</div>;
+  return <div className="brand"><img className="brand-mark" src="/favicon.svg" alt="" width="28" height="28" />Folio</div>;
 }
 
 function Icon({ size = 18, children }: { size?: number; children: ReactNode }) {

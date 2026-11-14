@@ -75,7 +75,7 @@ input[role=switch]:checked::before { transform:translateX(14px); }
 
 /* Brand and sign-in */
 .brand { display:flex; align-items:center; gap:10px; font-size:1.0625rem; font-weight:600; letter-spacing:-.01em; }
-.brand-mark { color:var(--accent); flex-shrink:0; }
+.brand-mark { flex-shrink:0; }
 .login-page { min-height:100dvh; display:grid; place-items:center; padding:24px 16px; }
 .login-card { display:flex; flex-direction:column; width:100%; max-width:400px; padding:32px; border:1px solid var(--border); border-radius:16px; background:var(--surface); box-shadow:var(--shadow-card); }
 .login-heading { display:flex; align-items:center; justify-content:space-between; gap:16px; }
