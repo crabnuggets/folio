@@ -1,14 +1,14 @@
 # Go backend
 
-The monthly sheet and legacy financial core serve the same REST/JSON API to React and Kotlin clients.
+The monthly sheet API serves React and Kotlin clients. See [MCP setup](../../docs/mcp.md) for authenticated proposal tools.
 The [shared contract](../../api/README.md) and [OpenAPI](../../api/openapi.yaml)
-cover implemented and explicitly deferred operations. [ADR 0005](../../docs/adr/0005-backend-owner-aggregate.md)
+cover the implemented monthly workflow. [ADR 0005](../../docs/adr/0005-backend-owner-aggregate.md)
 explains the PostgreSQL owner aggregate and its scaling tradeoff.
 
 The [monthly sheet contract](../../api/monthly-sheet-contract.md) defines the
 current section/item workflow, effective monthly recurrence, history lookup and
-safe Undo. It persists in the same owner aggregate and transaction while keeping
-legacy financial history separate. No migration or additional infrastructure is required.
+safe Undo. It persists in the transactional owner aggregate. Retired fields stay
+opaque in existing documents; no data conversion or deletion is performed.
 
 ## Local setup
 
@@ -111,11 +111,11 @@ local-development-only.
 
 ```sh
 curl -H "Authorization: Bearer $DEV_AUTH_TOKEN" http://localhost:8080/api/v1/settings
-curl -X POST http://localhost:8080/api/v1/accounts \
-  -H "Authorization: Bearer $DEV_AUTH_TOKEN" \
+curl -X POST http://localhost:8080/api/v1/monthly-sheets/2026-11/open \
+  -H 'Authorization: Bearer <local development token>' \
   -H 'Content-Type: application/json' \
-  -H "Idempotency-Key: $(uuidgen)" \
-  -d '{"alias":"Main","kind":"bank","currency":"SGD","active":true,"include_in_liquid_cash":true,"funding_boundary":[{"effective_month":"2026-01","included":true}]}'
+  -H 'Idempotency-Key: <new UUID>' \
+  -d '{}'
 ```
 
 Use UUID retry keys once per user action; preserve the key and exact body on
@@ -145,7 +145,7 @@ PostgreSQL and runs them. Database tests commit synthetic owner UUIDs and retry
 records without deleting them; always use a dedicated test database such as
 `folio_test`, separate from the application's `folio` database. They test parallel
 idempotency, rollback, durability, owner isolation and RLS. HTTP contract tests
-validate real responses against OpenAPI and consume shared fixtures.
+validate real responses against OpenAPI and exercise monthly behavior.
 
 From the repository root, in a Python virtual environment:
 

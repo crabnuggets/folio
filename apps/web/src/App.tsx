@@ -8,6 +8,7 @@ import { Brand } from './components/Brand';
 import { ThemeToggle } from './components/ThemeToggle';
 import { Form, text } from './components/Form';
 import { MonthlySheet } from './MonthlySheet';
+import { OAuthConsent } from './OAuthConsent';
 
 const api = new ApiClient();
 export function App() {
@@ -98,6 +99,21 @@ function SignedInApp() {
     window.addEventListener('beforeunload', warn);
     return () => window.removeEventListener('beforeunload', warn);
   }, []);
+  const logout = () => {
+      acceptSessions.current = false;
+      validation.current++; authorizedSubject.current = null;
+      api.setToken(null); void queryClient.cancelQueries(); queryClient.clear(); setStarted(false); setSignedIn(false); hasEdits.current = false;
+      setMessage('Signed out. Financial data was cleared from this tab.');
+      if (client) {
+        setBusy(true);
+        void client.signOut({ scope: 'local' }).then(({ error }) => {
+          if (error) {
+            client.stopAutoRefresh(); sessionStorage.removeItem(authStorageKey);
+            setMessage('Signed out of this tab. The server could not revoke the session.');
+          }
+        }).finally(() => setBusy(false));
+      }
+    };
   return <>
     {!signedIn && <main className="login-page"><div className="login-card">
       <div className="login-heading"><Brand /><ThemeToggle /></div>
@@ -124,21 +140,7 @@ function SignedInApp() {
       {!config && !message && <p role="status">Loading sign-in...</p>}
       {config && !client && !config.development_key && <p role="status">Sign-in is not configured. Contact the application owner.</p>}
     </div></main>}
-    {started && <div hidden={!signedIn}><MonthlySheet api={api} signedIn={signedIn} onDirty={value => { hasEdits.current = value; }} onLogout={() => {
-      acceptSessions.current = false;
-      validation.current++; authorizedSubject.current = null;
-      api.setToken(null); void queryClient.cancelQueries(); queryClient.clear(); setStarted(false); setSignedIn(false); hasEdits.current = false;
-      setMessage('Signed out. Financial data was cleared from this tab.');
-      if (client) {
-        setBusy(true);
-        void client.signOut({ scope: 'local' }).then(({ error }) => {
-          if (error) {
-            client.stopAutoRefresh(); sessionStorage.removeItem(authStorageKey);
-            setMessage('Signed out of this tab. The server could not revoke the session.');
-          }
-        }).finally(() => setBusy(false));
-      }
-    }} /></div>}
+    {started && <div hidden={!signedIn}>{window.location.pathname === '/oauth/consent' && client ? <OAuthConsent client={client} clientID={config?.mcp_client_id} onLogout={logout} /> : <MonthlySheet api={api} signedIn={signedIn} onDirty={value => { hasEdits.current = value; }} onLogout={logout} />}</div>}
   </>;
 }
 

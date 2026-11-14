@@ -1,6 +1,6 @@
 import { AuthClient, type GoTrueClient } from '@supabase/auth-js';
 
-export type BrowserAuth = { development_key: boolean; supabase_url?: string; publishable_key?: string };
+export type BrowserAuth = { development_key: boolean; supabase_url?: string; publishable_key?: string; mcp_client_id?: string };
 export const authStorageKey = 'folio-auth';
 let initialization: Promise<{ config: BrowserAuth; client: GoTrueClient | null }> | undefined;
 

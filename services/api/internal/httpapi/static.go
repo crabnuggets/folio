@@ -98,7 +98,7 @@ func unsafeWebPath(urlPath string) bool {
 }
 
 func reservedWebPath(urlPath string) bool {
-	for _, prefix := range []string{"/api", "/healthz", "/readyz"} {
+	for _, prefix := range []string{"/api", "/healthz", "/readyz", "/mcp", "/.well-known"} {
 		if urlPath == prefix || strings.HasPrefix(urlPath, prefix+"/") {
 			return true
 		}

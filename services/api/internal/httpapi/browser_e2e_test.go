@@ -99,19 +99,19 @@ func TestBrowserHarnessAuthenticationAndReset(t *testing.T) {
 		handler.ServeHTTP(w, r)
 		return w
 	}
-	for _, path := range []string{"/api/v1/accounts", "/__e2e/reset"} {
+	for _, path := range []string{"/api/v1/monthly-sheets/2026-10/open", "/__e2e/reset"} {
 		if got := request("POST", path, "wrong-synthetic-token", nil).Code; got != 401 {
 			t.Fatalf("unauthenticated %s status=%d", path, got)
 		}
 	}
-	created := request("POST", "/api/v1/accounts", browserBearer, mustJSON(accountInput("Synthetic browser account")))
-	if created.Code != 201 {
+	created := request("POST", "/api/v1/monthly-sheets/2026-10/open", browserBearer, []byte(`{}`))
+	if created.Code != 200 {
 		t.Fatalf("create status=%d: %s", created.Code, created.Body)
 	}
 	if got := request("POST", "/__e2e/reset", browserBearer, nil).Code; got != 204 {
 		t.Fatalf("reset status=%d", got)
 	}
-	page := request("GET", "/api/v1/accounts", browserBearer, nil)
+	page := request("GET", "/api/v1/monthly-drafts", browserBearer, nil)
 	if page.Code != 200 || !bytes.Contains(page.Body.Bytes(), []byte(`"items":[]`)) {
 		t.Fatalf("reset did not isolate state: %d %s", page.Code, page.Body)
 	}

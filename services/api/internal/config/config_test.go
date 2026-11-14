@@ -5,6 +5,29 @@ import (
 	"testing"
 )
 
+func TestHostedMCPConfigurationKeepsBrowserAudienceSeparate(t *testing.T) {
+	base := map[string]string{"APP_ENV": "production", "AUTH_MODE": "jwt", "OWNER_ID": "11111111-1111-4111-8111-111111111111", "DATABASE_URL": "postgres://synthetic:local@db.example/folio?sslmode=verify-full", "JWT_ISSUER": "https://auth.example/auth/v1", "JWT_AUDIENCE": "authenticated", "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_synthetic", "MCP_PUBLIC_ORIGIN": "https://folio.example", "MCP_CLIENT_ID": "22222222-2222-4222-8222-222222222222"}
+	cfg, err := FromEnv(func(key string) string { return base[key] })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Auth.Audience != "authenticated" || cfg.BrowserAuth.MCPClientID != base["MCP_CLIENT_ID"] {
+		t.Fatal("MCP changed browser audience or lost consent configuration")
+	}
+	for _, change := range []map[string]string{{"MCP_PUBLIC_ORIGIN": ""}, {"MCP_CLIENT_ID": ""}, {"MCP_PUBLIC_ORIGIN": "https://folio.example/"}, {"MCP_PUBLIC_ORIGIN": "http://folio.example"}, {"MCP_CLIENT_ID": "unregistered"}, {"SUPABASE_PUBLISHABLE_KEY": ""}} {
+		values := map[string]string{}
+		for k, v := range base {
+			values[k] = v
+		}
+		for k, v := range change {
+			values[k] = v
+		}
+		if _, err := FromEnv(func(key string) string { return values[key] }); err == nil {
+			t.Fatalf("unsafe MCP config accepted: %v", change)
+		}
+	}
+}
+
 func TestConfigurationSafety(t *testing.T) {
 	base := map[string]string{"APP_ENV": "development", "AUTH_MODE": "dev", "DEV_AUTH_TOKEN": strings.Repeat("x", 32), "OWNER_ID": "11111111-1111-4111-8111-111111111111", "DATABASE_URL": "postgres://folio:local@localhost:5432/folio?sslmode=disable"}
 	load := func(values map[string]string) (Config, error) {

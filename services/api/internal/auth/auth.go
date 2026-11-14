@@ -21,13 +21,22 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-type Config struct{ Mode, Environment, OwnerID, DevToken, Issuer, Audience, JWKSURL string }
+type Config struct{ Mode, Environment, OwnerID, DevToken, Issuer, Audience, JWKSURL, OAuthClientID, RequiredScope string }
 
 // BrowserConfig contains only public settings needed by the web sign-in screen.
 type BrowserConfig struct {
 	DevelopmentKey bool   `json:"development_key"`
 	SupabaseURL    string `json:"supabase_url,omitempty"`
 	PublishableKey string `json:"publishable_key,omitempty"`
+	MCPClientID    string `json:"mcp_client_id,omitempty"`
+}
+
+type accessClaims struct {
+	jwt.RegisteredClaims
+	ClientID    string `json:"client_id"`
+	Scope       string `json:"scope"`
+	Role        string `json:"role"`
+	IsAnonymous bool   `json:"is_anonymous"`
 }
 type verifier struct {
 	config               Config
@@ -49,6 +58,9 @@ func New(config Config) (func(http.Handler) http.Handler, error) {
 	}
 	config.OwnerID = strings.ToLower(config.OwnerID)
 	if config.Mode == "dev" {
+		if config.OAuthClientID != "" || config.RequiredScope != "" {
+			return nil, errors.New("MCP requires JWT authentication")
+		}
 		if config.Environment != "development" && config.Environment != "test" {
 			return nil, errors.New("development authentication is disabled outside development and test")
 		}
@@ -96,7 +108,7 @@ func New(config Config) (func(http.Handler) http.Handler, error) {
 					return
 				}
 			} else {
-				claims := &jwt.RegisteredClaims{}
+				claims := &accessClaims{}
 				parsed, err := jwt.ParseWithClaims(token, claims, v.key, jwt.WithValidMethods([]string{"RS256", "ES256"}), jwt.WithIssuer(config.Issuer), jwt.WithAudience(config.Audience), jwt.WithExpirationRequired(), jwt.WithIssuedAt(), jwt.WithLeeway(10*time.Second))
 				if err != nil || !parsed.Valid {
 					writeError(w, 401, "UNAUTHENTICATED", "A valid bearer access token is required")
@@ -105,6 +117,30 @@ func New(config Config) (func(http.Handler) http.Handler, error) {
 				if strings.ToLower(claims.Subject) != config.OwnerID {
 					writeError(w, 403, "FORBIDDEN", "This application is restricted to its owner")
 					return
+				}
+				if claims.IsAnonymous || claims.Role == "service_role" || claims.Role == "anon" {
+					writeError(w, 403, "FORBIDDEN", "A signed-in owner is required")
+					return
+				}
+				if config.OAuthClientID == "" && claims.ClientID != "" {
+					writeError(w, 403, "FORBIDDEN", "OAuth clients can only use the MCP draft tools")
+					return
+				}
+				if config.OAuthClientID != "" && claims.ClientID != config.OAuthClientID {
+					writeError(w, 401, "UNAUTHENTICATED", "An access token for the registered MCP client is required")
+					return
+				}
+				if config.RequiredScope != "" {
+					granted := false
+					for _, scope := range strings.Fields(claims.Scope) {
+						if scope == config.RequiredScope {
+							granted = true
+						}
+					}
+					if !granted {
+						writeError(w, 401, "INSUFFICIENT_SCOPE", "Authorize the required MCP scope")
+						return
+					}
 				}
 			}
 			next.ServeHTTP(w, r)
@@ -122,7 +158,9 @@ func writeError(w http.ResponseWriter, status int, code, message string) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
-	w.Header().Set("WWW-Authenticate", "Bearer")
+	if w.Header().Get("WWW-Authenticate") == "" {
+		w.Header().Set("WWW-Authenticate", "Bearer")
+	}
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(map[string]any{"error": map[string]any{"code": code, "message": message, "fields": map[string]string{}, "request_id": requestID}})
 }

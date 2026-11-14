@@ -58,6 +58,8 @@ type MonthlyItemInput struct {
 	RepeatMonthly    *bool   `json:"repeat_monthly,omitempty"`
 	UsualAmountMinor *Money  `json:"usual_amount_minor"`
 	ItemID           *string `json:"item_id"`
+	// Explanations is set only when accepting a proposal; the add endpoint cannot send it.
+	Explanations []MonthlyExplanation `json:"-"`
 }
 type MonthlyItemUpdate struct {
 	SectionID        string               `json:"section_id"`
@@ -104,7 +106,6 @@ type MonthlySheet struct {
 	Currency         string           `json:"currency"`
 	CurrencyExponent int              `json:"currency_exponent"`
 	CurrencyLocked   bool             `json:"currency_locked"`
-	HasLegacyData    bool             `json:"has_legacy_data"`
 	UndoToken        *string          `json:"undo_token"`
 	MoneyInMinor     Money            `json:"money_in_minor"`
 	MoneyOutMinor    Money            `json:"money_out_minor"`

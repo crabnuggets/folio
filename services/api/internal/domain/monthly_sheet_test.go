@@ -2,6 +2,7 @@ package domain
 
 import (
 	"encoding/json"
+	"errors"
 	"math"
 	"reflect"
 	"testing"
@@ -55,7 +56,6 @@ func TestMonthlySheetReportsCurrencyLockAcrossMonths(t *testing.T) {
 			monthlyCheck(t, err)
 		}},
 		{"usual only", true, func(s *State) { monthlyAdd(t, s, "2026-10", monthlyIncome, "Usual", nil, true, monthlyAmount(1)) }},
-		{"legacy setup", true, func(s *State) { s.LegacySummaries = append(s.LegacySummaries, LegacySummary{Meta: NewMeta()}) }},
 	} {
 		t.Run(setup.name, func(t *testing.T) {
 			s := NewState()
@@ -75,11 +75,8 @@ func TestMonthlySheetReportsCurrencyLockAcrossMonths(t *testing.T) {
 	}
 }
 
-func TestMonthlySheetTotalsBlankZeroAndLegacySeparation(t *testing.T) {
+func TestMonthlySheetTotalsBlankAndZero(t *testing.T) {
 	s := NewState()
-	// Synthetic amounts; legacy review state must not affect monthly editing.
-	s.LegacySummaries = append(s.LegacySummaries, LegacySummary{Meta: NewMeta(), Month: "2026-10", AmountMinor: 999})
-	s.Months["2026-10"] = Month{Month: "2026-10", State: "closed"}
 	monthlyAdd(t, s, "2026-10", monthlyIncome, "Salary", monthlyAmount(10000), false, nil)
 	monthlyAdd(t, s, "2026-10", monthlyCards, "Sample card", monthlyAmount(2100), false, nil)
 	monthlyAdd(t, s, "2026-10", monthlyRecurring, "House saving", monthlyAmount(1200), false, nil)
@@ -87,14 +84,11 @@ func TestMonthlySheetTotalsBlankZeroAndLegacySeparation(t *testing.T) {
 	monthlyAdd(t, s, "2026-10", monthlyOther, "Zero", monthlyAmount(0), false, nil)
 	sheet, err := s.GetMonthlySheet("2026-10")
 	monthlyCheck(t, err)
-	if sheet.MoneyInMinor != 10000 || sheet.MoneyOutMinor != 3300 || sheet.RemainderMinor != 6700 || sheet.MissingCount != 1 || !sheet.HasLegacyData {
+	if sheet.MoneyInMinor != 10000 || sheet.MoneyOutMinor != 3300 || sheet.RemainderMinor != 6700 || sheet.MissingCount != 1 {
 		t.Fatalf("wrong monthly totals: %+v", sheet)
 	}
 	if sheet.Sections[3].AmountLabel != "Bill amount" || sheet.Sections[3].TotalMinor != 2100 {
 		t.Fatal("card amount counted incorrectly")
-	}
-	if len(s.Entries) != 0 || s.Months["2026-10"].State != "closed" || s.LegacySummaries[0].AmountMinor != 999 {
-		t.Fatal("monthly sheet changed legacy data")
 	}
 	_, err = s.UpdateSettings(SettingsInput{"USD", "Asia/Singapore"}, s.Settings.Version)
 	if err == nil {
@@ -341,5 +335,13 @@ func TestMonthlySuggestionsRankSectionFrequencyThenRecency(t *testing.T) {
 	monthlyCheck(t, err)
 	if len(suggestions.Items) != 4 || suggestions.Items[0].Name != "Local card" || suggestions.Items[1].ID != frequent || suggestions.Items[2].ID != recent || suggestions.Items[3].Name != "Older card" {
 		t.Fatalf("wrong history ranking: %+v", suggestions.Items)
+	}
+}
+
+func aeErrorCode(t *testing.T, err error, code string) {
+	t.Helper()
+	var de *Error
+	if !errors.As(err, &de) || de.Code != code {
+		t.Fatalf("wanted %s, got %v", code, err)
 	}
 }
