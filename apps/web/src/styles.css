@@ -220,6 +220,17 @@ input.amount-field:hover:not(:disabled,:focus,[aria-invalid=true]) { border-colo
 .item-details { grid-column:1/-1; padding:10px 8px 14px 0; }
 .item-details .field { margin-bottom:12px; }
 .item-details textarea { resize:vertical; }
+.explanation-list { grid-column:1/-1; margin:0 8px 8px 18px; padding-left:12px; border-left:2px solid var(--border-strong); font-size:.8125rem; }
+.explanation-list>div { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:8px; padding:5px 0; }
+.explanation-list dt { overflow-wrap:anywhere; color:var(--secondary); }
+.explanation-list dd { margin:0; font-variant-numeric:tabular-nums; }
+.explanation-list .unexplained { margin-top:4px; border-top:1px dashed var(--border-strong); color:var(--secondary); }
+.explanation-editor { margin:16px 0; padding:12px 0 0; border-top:1px solid var(--border-strong); }
+.explanation-editor legend { padding:0 8px 0 0; font-size:.875rem; font-weight:600; }
+.explanation-editor p { font-size:.8125rem; }
+.explanation-limit { margin:4px 0 12px; color:var(--secondary); }
+.explanation-fields { display:grid; grid-template-columns:minmax(0,1fr) minmax(80px,112px) 32px; align-items:end; gap:8px; }
+.explanation-fields .icon-button { margin-bottom:12px; }
 .item-details input:not([role=switch]),.item-details textarea { background:var(--surface); }
 .details-actions { margin-top:12px; }
 .details-more-title { margin:14px 0 8px; padding-top:12px; border-top:1px solid var(--border-strong); font-size:.8125rem; font-weight:600; }

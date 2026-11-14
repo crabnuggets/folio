@@ -20,13 +20,19 @@ type MonthlyItemIdentity struct {
 	Preferences []MonthlyPreference `json:"preferences"`
 }
 type MonthlyStoredRow struct {
-	ItemID      string `json:"item_id"`
-	SectionID   string `json:"section_id"`
-	AmountMinor *Money `json:"amount_minor"`
-	Note        string `json:"note"`
-	Removed     bool   `json:"removed"`
-	Generated   bool   `json:"generated"`
-	Touched     bool   `json:"touched"`
+	ItemID       string               `json:"item_id"`
+	SectionID    string               `json:"section_id"`
+	AmountMinor  *Money               `json:"amount_minor"`
+	Note         string               `json:"note"`
+	Removed      bool                 `json:"removed"`
+	Generated    bool                 `json:"generated"`
+	Touched      bool                 `json:"touched"`
+	Explanations []MonthlyExplanation `json:"explanations,omitempty"`
+}
+
+type MonthlyExplanation struct {
+	Name        string `json:"name"`
+	AmountMinor Money  `json:"amount_minor"`
 }
 type MonthlySheetData struct {
 	Sections []MonthlySectionDefinition             `json:"sections"`
@@ -54,12 +60,13 @@ type MonthlyItemInput struct {
 	ItemID           *string `json:"item_id"`
 }
 type MonthlyItemUpdate struct {
-	SectionID        string `json:"section_id"`
-	Name             string `json:"name"`
-	AmountMinor      *Money `json:"amount_minor"`
-	Note             string `json:"note"`
-	RepeatMonthly    bool   `json:"repeat_monthly"`
-	UsualAmountMinor *Money `json:"usual_amount_minor"`
+	SectionID        string               `json:"section_id"`
+	Name             string               `json:"name"`
+	AmountMinor      *Money               `json:"amount_minor"`
+	Note             string               `json:"note"`
+	RepeatMonthly    bool                 `json:"repeat_monthly"`
+	UsualAmountMinor *Money               `json:"usual_amount_minor"`
+	Explanations     []MonthlyExplanation `json:"explanations,omitzero"`
 }
 type MonthlyUsualInput struct {
 	SectionID *string `json:"section_id"`
@@ -75,13 +82,15 @@ type MonthlySectionRename struct {
 	Name string `json:"name"`
 }
 type MonthlyItem struct {
-	ID               string `json:"id"`
-	Name             string `json:"name"`
-	SectionID        string `json:"section_id"`
-	AmountMinor      *Money `json:"amount_minor"`
-	Note             string `json:"note"`
-	RepeatMonthly    bool   `json:"repeat_monthly"`
-	UsualAmountMinor *Money `json:"usual_amount_minor"`
+	ID               string               `json:"id"`
+	Name             string               `json:"name"`
+	SectionID        string               `json:"section_id"`
+	AmountMinor      *Money               `json:"amount_minor"`
+	Note             string               `json:"note"`
+	RepeatMonthly    bool                 `json:"repeat_monthly"`
+	UsualAmountMinor *Money               `json:"usual_amount_minor"`
+	Explanations     []MonthlyExplanation `json:"explanations,omitempty"`
+	UnexplainedMinor *Money               `json:"unexplained_minor,omitempty"`
 }
 type MonthlySection struct {
 	MonthlySectionDefinition

@@ -10,6 +10,7 @@ import (
 
 // Required-field checks distinguish omitted fields from explicit zero/false.
 var requiredFields = map[string][]string{
+	"MonthlyExplanation":        {"name", "amount_minor"},
 	"MonthlyItemInput":          {"section_id", "name", "amount_minor"},
 	"MonthlyItemUpdate":         {"section_id", "name", "amount_minor", "note", "repeat_monthly", "usual_amount_minor"},
 	"MonthlyUndoInput":          {"undo_token"},
