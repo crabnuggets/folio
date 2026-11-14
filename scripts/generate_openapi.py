@@ -148,8 +148,10 @@ direction = {"type": "string", "enum": ["in", "out"]}
 label = {"type": "string", "enum": ["Amount", "Bill amount"]}
 monthly_fields = {"section_id": ID, "name": {"type": "string", "minLength": 1, "maxLength": 120}, "amount_minor": nullable(AMOUNT), "note": S, "repeat_monthly": BOOL, "usual_amount_minor": nullable(AMOUNT)}
 add("MonthlyItemInput", {**monthly_fields, "item_id": nullable(ID)}, ["section_id", "name", "amount_minor"])
-add("MonthlyItemUpdate", monthly_fields)
-add("MonthlyItem", {"id": ID, **monthly_fields})
+add("MonthlyExplanation", {"name": monthly_fields["name"], "amount_minor": AMOUNT}, description="A named positive amount explaining part of one monthly outgoing item. No nesting. The sum cannot exceed the parent monthly amount.")
+explanations = array(ref("MonthlyExplanation"))
+add("MonthlyItemUpdate", {**monthly_fields, "explanations": {**explanations, "description": "Replaces this month's explanations when supplied. An empty array removes all explanations. Omit to preserve existing explanations."}}, list(monthly_fields))
+add("MonthlyItem", {"id": ID, **monthly_fields, "explanations": explanations, "unexplained_minor": {**AMOUNT, "description": "Remaining amount, present only when explanations exist and their sum is less than the parent amount."}}, ["id", *monthly_fields])
 add("MonthlySectionDefinition", {"id": ID, "name": S, "direction": direction, "amount_label": label})
 add("MonthlySection", {**SCHEMAS["MonthlySectionDefinition"]["properties"], "total_minor": AMOUNT, "missing_count": {"type": "integer", "minimum": 0}, "items": array(ref("MonthlyItem"))})
 add("MonthlySheet", {"month": MONTH, "version": VERSION, "currency": CURRENCY, "currency_exponent": {"type": "integer", "minimum": 0, "maximum": 4}, "currency_locked": BOOL, "has_legacy_data": BOOL, "undo_token": nullable(ID), "money_in_minor": AMOUNT, "money_out_minor": AMOUNT, "remainder_minor": AMOUNT, "missing_count": {"type": "integer", "minimum": 0}, "sections": array(ref("MonthlySection"))})
@@ -169,6 +171,7 @@ add("MonthlySectionRename", {"name": {"type": "string", "minLength": 1, "maxLeng
 add("MonthlyPreference", {"month": MONTH, "section_id": ID, "repeat_monthly": BOOL, "usual_amount_minor": nullable(AMOUNT)})
 add("MonthlyItemIdentity", {"id": ID, "name": S, "direction": direction, "aliases": array(S), "preferences": array(ref("MonthlyPreference"))})
 add("MonthlyStoredRow", {"item_id": ID, "section_id": ID, "amount_minor": nullable(AMOUNT), "note": S, "removed": BOOL, "generated": BOOL, "touched": BOOL})
+SCHEMAS["MonthlyStoredRow"]["properties"]["explanations"] = explanations
 monthly_data = {"sections": array(ref("MonthlySectionDefinition")), "items": {"type": "object", "additionalProperties": ref("MonthlyItemIdentity")}, "rows": {"type": "object", "additionalProperties": {"type": "object", "additionalProperties": ref("MonthlyStoredRow")}}}
 add("MonthlySheetData", monthly_data)
 add("MonthlyStoredUndo", {"token": ID, "version": VERSION, "before": ref("MonthlySheetData")})
