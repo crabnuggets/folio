@@ -22,6 +22,16 @@ function amount(value: string, exponent: number) {
   if (BigInt(result) < 0n) throw new Error('Enter zero or a positive amount.');
   return result;
 }
+function validateExplanations(parent: string | null, explanations: S['MonthlyExplanation'][]) {
+  if (!explanations.length) return;
+  if (parent == null) throw new Error('Enter the parent amount before adding explanations.');
+  let remaining = BigInt(parent);
+  for (const explanation of explanations) {
+    if (BigInt(explanation.amount_minor) <= 0n) throw new Error('Enter a positive amount for each explanation.');
+    remaining -= BigInt(explanation.amount_minor);
+  }
+  if (remaining < 0n) throw new Error('Explanations cannot exceed the parent amount. Reduce or remove explanations first.');
+}
 function currentMonth() {
   const parts = new Intl.DateTimeFormat('en', { timeZone: 'Asia/Singapore', year: 'numeric', month: '2-digit' }).formatToParts(new Date());
   return `${parts.find(p => p.type === 'year')!.value}-${parts.find(p => p.type === 'month')!.value}`;
@@ -328,7 +338,10 @@ function ItemRow({ item, section, sheet, api, available, locked, failed, feedbac
   const save = (explicit = false) => {
     if (!edited.current || locked || !available || placementChanged && !explicit) return;
     let minor: string | null;
-    try { minor = value.trim() === '' ? null : amount(value, sheet.currency_exponent); }
+    try {
+      minor = value.trim() === '' ? null : amount(value, sheet.currency_exponent);
+      validateExplanations(minor, item.explanations ?? []);
+    }
     catch (error) { setError(errorMessage(error)); return; }
     saveEdit(latest => api.command<'MonthlySheet'>(`/monthly-sheets/${sheet.month}/items/${item.id}`, { ...updateInput(findItem(latest, item.id)), amount_minor: minor }, { method: 'PUT', version: latest.version }), clean);
   };
@@ -362,6 +375,10 @@ function ItemRow({ item, section, sheet, api, available, locked, failed, feedbac
     {feedback(edited.current ? `Totals still use ${item.amount_minor == null ? 'a blank amount' : formatMoney(item.amount_minor, sheet.currency, sheet.currency_exponent)}.` : undefined)}
     {reviewEdit && <div className="row-status">{placementChanged ? <>{current ? `Moved to ${sheet.sections.find(section => section.id === current.section_id)?.name} in another tab.` : 'Skipped in another tab.'} Your unsaved edits remain here. Save to reapply or discard them. Latest saved amount: {saved}</> : <>Your entry: {entered || 'blank'}. Latest saved: {saved}.</>}<div className="actions"><button onClick={() => save(true)} disabled={!available}>{!current ? 'Restore and reapply amount' : placementChanged ? 'Save amount' : entered ? `Keep my ${entered}` : 'Keep blank'}</button><button data-discard-amount={item.id} onClick={discard}>{placementChanged ? 'Discard edit' : item.amount_minor == null ? 'Use saved blank' : `Use saved ${groupAmount(moneyInput(item.amount_minor, sheet.currency_exponent))}`}</button></div></div>}
     {placementChanged && !reviewEdit && <p className="row-status">{current ? `Moved to ${sheet.sections.find(section => section.id === current.section_id)?.name} in another tab.` : 'Skipped in another tab.'} Your unsaved edits remain here. Save to reapply or discard them.</p>}
+    {!details && Boolean(item.explanations?.length) && <dl className="explanation-list" aria-label={`Explanations for ${item.name}`}>
+      {item.explanations!.map((explanation, index) => <div key={index}><dt>{explanation.name}</dt><dd>{groupAmount(moneyInput(explanation.amount_minor, sheet.currency_exponent))}</dd></div>)}
+      {item.unexplained_minor != null && <div className="unexplained"><dt>Unexplained</dt><dd>{groupAmount(moneyInput(item.unexplained_minor, sheet.currency_exponent))}</dd></div>}
+    </dl>}
     {details && <ItemDetails item={item} sheet={sheet} api={api} perform={perform} saveEdit={saveEdit} disabled={locked || !available || edited.current} blockedByAmount={edited.current} focusName={!openedByTouch.current} markDirty={(key, value) => { detailsDirty.current = value; markDirty(key, value); }} onClose={closeDetails} clean={clean} notify={notify} />}
   </div>;
 }
@@ -374,6 +391,8 @@ function ItemDetails({ item, sheet, api, perform, saveEdit, disabled, blockedByA
   const [note, setNote] = useState(item.note);
   const [repeat, setRepeat] = useState(item.repeat_monthly);
   const [usual, setUsual] = useState(moneyInput(item.usual_amount_minor, sheet.currency_exponent));
+  const [explanations, setExplanations] = useState(() => (item.explanations ?? []).map((entry, key) => ({ key, name: entry.name, value: moneyInput(entry.amount_minor, sheet.currency_exponent) })));
+  const nextExplanationKey = useRef(explanations.length);
   const [error, setError] = useState('');
   const dirtyKey = `${item.id}-details`;
   const changedFields = useRef(new Set<keyof S['MonthlyItemUpdate']>());
@@ -385,7 +404,9 @@ function ItemDetails({ item, sheet, api, perform, saveEdit, disabled, blockedByA
     event.preventDefault(); setError('');
     try {
       const usualMinor = repeat && usual.trim() ? amount(usual, sheet.currency_exponent) : null;
-      const edits = { name, note, repeat_monthly: repeat, usual_amount_minor: usualMinor };
+      const entries = explanations.map(entry => ({ name: entry.name, amount_minor: amount(entry.value, sheet.currency_exponent) }));
+      if (changedFields.current.has('explanations')) validateExplanations(item.amount_minor, entries);
+      const edits = { name, note, repeat_monthly: repeat, usual_amount_minor: usualMinor, explanations: entries };
       saveEdit(latest => {
         const input = updateInput(findItem(latest, item.id));
         for (const field of Object.keys(edits) as (keyof typeof edits)[]) if (changedFields.current.has(field)) Object.assign(input, { [field]: edits[field] });
@@ -399,9 +420,28 @@ function ItemDetails({ item, sheet, api, perform, saveEdit, disabled, blockedByA
     <div className="check-field"><input id={`${inputId}-repeat`} type="checkbox" role="switch" checked={repeat} onChange={event => { setRepeat(event.target.checked); changed('repeat_monthly'); changed('usual_amount_minor'); }} /><label htmlFor={`${inputId}-repeat`}>Repeat monthly</label></div>
     {!repeat && item.repeat_monthly && <p className="quiet switch-hint">Won't appear from next month, once saved.</p>}
     {repeat && <><p className="quiet switch-hint">Appears each month. Enter the amount when you know it.</p><div className="field"><label htmlFor={`${inputId}-usual`}>Usual amount</label><input id={`${inputId}-usual`} className="amount-input" inputMode="decimal" value={usual} onChange={event => { setUsual(event.target.value); changed('usual_amount_minor'); }} /><small>Optional suggestion. Existing monthly amounts stay as entered.</small></div></>}
+    {sheet.sections.find(section => section.id === item.section_id)?.direction === 'out' && <fieldset className="explanation-editor"><legend>Explanations</legend>
+      <p className="quiet">Optional subitems for this month. They don't add to your totals.</p>
+      <p className="explanation-limit">{item.amount_minor == null ? 'Enter an amount for this item first.' : <>Combined limit: {formatMoney(item.amount_minor, sheet.currency, sheet.currency_exponent)}. You can leave part unexplained.</>}</p>
+      {explanations.map((entry, index) => <div className="explanation-fields" key={entry.key}>
+        <div className="field"><label htmlFor={`${inputId}-explanation-${entry.key}`}>Explanation {index + 1}</label><input id={`${inputId}-explanation-${entry.key}`} required maxLength={120} value={entry.name} onChange={event => { setExplanations(previous => previous.map(value => value.key === entry.key ? { ...value, name: event.target.value } : value)); changed('explanations'); setError(''); }} /></div>
+        <div className="field"><label htmlFor={`${inputId}-explanation-amount-${entry.key}`}>Amount</label><input id={`${inputId}-explanation-amount-${entry.key}`} className="amount-input" inputMode="decimal" required value={entry.value} onChange={event => { setExplanations(previous => previous.map(value => value.key === entry.key ? { ...value, value: event.target.value } : value)); changed('explanations'); setError(''); }} /></div>
+        <button type="button" className="icon-button" aria-label={`Remove explanation ${index + 1}`} onClick={() => {
+          const remaining = explanations.filter(value => value.key !== entry.key);
+          const adjacent = remaining[Math.min(index, remaining.length - 1)];
+          setExplanations(remaining); changed('explanations'); setError('');
+          requestAnimationFrame(() => document.getElementById(adjacent ? `${inputId}-explanation-${adjacent.key}` : `${inputId}-add-explanation`)?.focus());
+        }}><Close /></button>
+      </div>)}
+      <button id={`${inputId}-add-explanation`} type="button" className="accent-button" disabled={item.amount_minor == null || item.amount_minor === '0'} onClick={() => {
+        const key = nextExplanationKey.current++;
+        setExplanations(previous => [...previous, { key, name: '', value: '' }]); changed('explanations');
+        requestAnimationFrame(() => document.getElementById(`${inputId}-explanation-${key}`)?.focus());
+      }}><Plus />Add explanation</button>
+    </fieldset>}
     {error && <p className="error" role="alert">{error}</p>}
     <div className="actions details-actions"><button className="primary" disabled={Boolean(findItem(sheet, item.id)) && !changedFields.current.size}>{findItem(sheet, item.id) ? 'Save details' : 'Restore and reapply details'}</button><button type="button" onClick={cancel}>Cancel</button></div>
-    <p className="details-more-title">This month</p>{changedFields.current.size > 0 && <p className="quiet switch-hint">Save or cancel your changes above first. These actions apply right away.</p>}<div className="details-more"><button type="button" disabled={!findItem(sheet, item.id) || item.amount_minor == null || changedFields.current.size > 0} onClick={() => void perform(item.id, latest => api.command<'MonthlySheet'>(`/monthly-sheets/${sheet.month}/items/${item.id}`, { ...updateInput(findItem(latest, item.id)), amount_minor: null }, { method: 'PUT', version: latest.version }), result => { done(result); notify({ text: `Cleared ${item.name}.`, undo: 'Undo clear' }); })}>Clear amount</button><span className="quiet">Leaves this month's amount blank.</span>
+    <p className="details-more-title">This month</p>{changedFields.current.size > 0 && <p className="quiet switch-hint">Save or cancel your changes above first. These actions apply right away.</p>}<div className="details-more"><button type="button" disabled={!findItem(sheet, item.id) || item.amount_minor == null || Boolean(item.explanations?.length) || changedFields.current.size > 0} onClick={() => void perform(item.id, latest => api.command<'MonthlySheet'>(`/monthly-sheets/${sheet.month}/items/${item.id}`, { ...updateInput(findItem(latest, item.id)), amount_minor: null }, { method: 'PUT', version: latest.version }), result => { done(result); notify({ text: `Cleared ${item.name}.`, undo: 'Undo clear' }); })}>Clear amount</button><span className="quiet">{item.explanations?.length ? 'Remove explanations before clearing the amount.' : "Leaves this month's amount blank."}</span>
       <button type="button" disabled={!findItem(sheet, item.id) || changedFields.current.size > 0} onClick={() => void perform(item.id, latest => api.command<'MonthlySheet'>(`/monthly-sheets/${sheet.month}/items/${item.id}/remove`, {}, { version: latest.version }), result => { done(result); notify({ text: `Skipped ${item.name} this month.`, undo: 'Undo skip' }); })}>Skip this month</button><span className="quiet">Removes it from this month only. History stays saved.</span>
     </div>
   </fieldset></form></div>;

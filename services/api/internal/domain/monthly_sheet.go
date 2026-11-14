@@ -49,6 +49,32 @@ func sameMonthlyMoney(a, b *Money) bool {
 	return a == nil && b == nil || a != nil && b != nil && *a == *b
 }
 
+func monthlyUnexplained(amount *Money, explanations []MonthlyExplanation) (*Money, error) {
+	if len(explanations) == 0 {
+		return nil, nil
+	}
+	if amount == nil {
+		return nil, Invalid("Enter the parent amount before adding explanations")
+	}
+	remaining := *amount
+	for _, explanation := range explanations {
+		if monthlyName(explanation.Name) == "" || len(explanation.Name) > 120 {
+			return nil, Invalid("Explanation name must contain 1 to 120 bytes")
+		}
+		if explanation.AmountMinor <= 0 {
+			return nil, Invalid("Explanation amounts must be positive")
+		}
+		if explanation.AmountMinor > remaining {
+			return nil, Invalid("Explanations cannot exceed the parent amount. Reduce or remove explanations first.")
+		}
+		remaining -= explanation.AmountMinor
+	}
+	if remaining == 0 {
+		return nil, nil
+	}
+	return &remaining, nil
+}
+
 // setMonthlyPreference retains effective periods so past months and future edits
 // keep their meaning when a preference is changed in a different month.
 func (s *State) setMonthlyPreference(item *MonthlyItemIdentity, month, section string, repeat bool, usual *Money) {
@@ -153,7 +179,11 @@ func (s *State) GetMonthlySheet(month string) (MonthlySheet, error) {
 			}
 			item := s.MonthlySheet.Items[id]
 			p := item.preference(month)
-			view.Items = append(view.Items, MonthlyItem{id, item.Name, row.SectionID, row.AmountMinor, row.Note, p.RepeatMonthly, p.UsualAmountMinor})
+			unexplained, err := monthlyUnexplained(row.AmountMinor, row.Explanations)
+			if err != nil {
+				return MonthlySheet{}, err
+			}
+			view.Items = append(view.Items, MonthlyItem{ID: id, Name: item.Name, SectionID: row.SectionID, AmountMinor: row.AmountMinor, Note: row.Note, RepeatMonthly: p.RepeatMonthly, UsualAmountMinor: p.UsualAmountMinor, Explanations: row.Explanations, UnexplainedMinor: unexplained})
 			if row.AmountMinor == nil {
 				view.MissingCount++
 			} else {
@@ -301,6 +331,18 @@ func (s *State) UpdateMonthlyItem(month, id string, in MonthlyItemUpdate, expect
 	}
 	if _, collision := s.findMonthlyItem(name, item.Direction, id); collision {
 		return MonthlySheet{}, Fail(409, "ITEM_NAME_EXISTS", "An item with this name already exists on this side of the sheet")
+	}
+	if in.Explanations != nil {
+		row.Explanations = append([]MonthlyExplanation{}, in.Explanations...)
+		for i := range row.Explanations {
+			row.Explanations[i].Name = monthlyName(row.Explanations[i].Name)
+		}
+	}
+	if len(row.Explanations) > 0 && section.Direction != "out" {
+		return MonthlySheet{}, Invalid("Only money out items can have explanations")
+	}
+	if _, err := monthlyUnexplained(in.AmountMinor, row.Explanations); err != nil {
+		return MonthlySheet{}, err
 	}
 	if name != item.Name {
 		item.Aliases = append(item.Aliases, item.Name)

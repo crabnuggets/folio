@@ -1,0 +1,53 @@
+import { test, expect, signIn, sectionIds, noHorizontalOverflow } from './fixtures';
+
+test('explanations stay within the parent, support partial amounts, removal and Undo', async ({ page, backend }) => {
+  await backend.add('Maybank XL Cashback', '128000', sectionIds.cards);
+  await signIn(page);
+  const parent = page.getByRole('button', { name: 'Maybank XL Cashback', exact: true });
+  const summary = page.getByLabel('Explanations for Maybank XL Cashback', { exact: true });
+  const bill = page.getByLabel('Bill amount for Maybank XL Cashback', { exact: true });
+  await expect(page.getByText('Unexplained', { exact: true })).toHaveCount(0);
+  await parent.click();
+  for (const [name, value] of [['Groceries', '342.80'], ['Dining', '185.50']]) {
+    await page.getByRole('button', { name: 'Add explanation', exact: true }).click();
+    const row = page.locator('.explanation-fields').last();
+    await expect(row.getByRole('textbox').first()).toBeFocused();
+    await row.getByRole('textbox').first().fill(name);
+    await row.getByRole('textbox').last().fill(value);
+  }
+  await expect(page.getByRole('button', { name: /^Month:/ })).toBeDisabled();
+  await page.getByRole('button', { name: 'Save details', exact: true }).click();
+  await expect(summary).toContainText('Groceries');
+  await expect(summary).toContainText('751.70');
+  await expect(summary.getByRole('button')).toHaveCount(0);
+  await expect(page.getByLabel('Credit cards subtotal')).toHaveText('1,280.00');
+  await bill.fill('500'); await bill.press('Enter');
+  await expect(page.getByRole('alert')).toContainText('Explanations cannot exceed');
+  await page.getByRole('button', { name: 'Discard edit', exact: true }).click();
+  await parent.click();
+  await expect(page.getByRole('button', { name: 'Clear amount', exact: true })).toBeDisabled();
+  await page.locator('.explanation-fields').last().getByRole('textbox').last().fill('1,000');
+  await page.getByRole('button', { name: 'Save details', exact: true }).click();
+  await expect(page.getByRole('alert')).toContainText('Explanations cannot exceed');
+  await page.locator('.explanation-fields').last().getByRole('textbox').last().fill('937.20');
+  await page.getByRole('button', { name: 'Save details', exact: true }).click();
+  await expect(summary).toBeVisible();
+  await expect(page.getByText('Unexplained', { exact: true })).toHaveCount(0);
+  await parent.click();
+  await page.getByRole('button', { name: 'Remove explanation 1', exact: true }).focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('textbox', { name: 'Explanation 1', exact: true })).toBeFocused();
+  await page.getByRole('button', { name: 'Remove explanation 1', exact: true }).focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('button', { name: 'Add explanation', exact: true })).toBeFocused();
+  await noHorizontalOverflow(page);
+  await page.getByRole('button', { name: 'Save details', exact: true }).click();
+  await expect(summary).toHaveCount(0);
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  await expect(summary).toContainText('Groceries');
+  const sheet = await backend.get<'MonthlySheet'>('/monthly-sheets/2026-10');
+  expect(sheet.money_out_minor).toBe('128000');
+  await page.setViewportSize({ width: 320, height: 800 });
+  await parent.click();
+  await noHorizontalOverflow(page);
+});

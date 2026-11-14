@@ -1691,6 +1691,11 @@ export interface components {
             usual_amount_minor?: components["schemas"]["Money"] | null;
             item_id?: components["schemas"]["UUID"] | null;
         };
+        /** @description A named positive amount explaining part of one monthly outgoing item. No nesting. The sum cannot exceed the parent monthly amount. */
+        MonthlyExplanation: {
+            name: string;
+            amount_minor: components["schemas"]["Money"];
+        };
         MonthlyItemUpdate: {
             section_id: components["schemas"]["UUID"];
             name: string;
@@ -1698,6 +1703,8 @@ export interface components {
             note: string;
             repeat_monthly: boolean;
             usual_amount_minor: components["schemas"]["Money"] | null;
+            /** @description Replaces this month's explanations when supplied. An empty array removes all explanations. Omit to preserve existing explanations. */
+            explanations?: components["schemas"]["MonthlyExplanation"][];
         };
         MonthlyItem: {
             id: components["schemas"]["UUID"];
@@ -1707,6 +1714,9 @@ export interface components {
             note: string;
             repeat_monthly: boolean;
             usual_amount_minor: components["schemas"]["Money"] | null;
+            explanations?: components["schemas"]["MonthlyExplanation"][];
+            /** @description Remaining amount, present only when explanations exist and their sum is less than the parent amount. */
+            unexplained_minor?: components["schemas"]["Money"];
         };
         MonthlySectionDefinition: {
             id: components["schemas"]["UUID"];
@@ -1831,6 +1841,7 @@ export interface components {
             removed: boolean;
             generated: boolean;
             touched: boolean;
+            explanations?: components["schemas"]["MonthlyExplanation"][];
         };
         MonthlySheetData: {
             sections: components["schemas"]["MonthlySectionDefinition"][];

@@ -37,7 +37,7 @@ func monthlyUpdate(t *testing.T, s *State, month, id string) MonthlyItemUpdate {
 	row := s.MonthlySheet.Rows[month][id]
 	item := s.MonthlySheet.Items[id]
 	p := item.preference(month)
-	return MonthlyItemUpdate{row.SectionID, item.Name, row.AmountMinor, row.Note, p.RepeatMonthly, p.UsualAmountMinor}
+	return MonthlyItemUpdate{SectionID: row.SectionID, Name: item.Name, AmountMinor: row.AmountMinor, Note: row.Note, RepeatMonthly: p.RepeatMonthly, UsualAmountMinor: p.UsualAmountMinor}
 }
 
 func TestMonthlySheetReportsCurrencyLockAcrossMonths(t *testing.T) {
