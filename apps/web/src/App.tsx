@@ -140,7 +140,10 @@ function SignedInApp() {
       {!config && !message && <p role="status">Loading sign-in...</p>}
       {config && !client && !config.development_key && <p role="status">Sign-in is not configured. Contact the application owner.</p>}
     </div></main>}
-    {started && <div hidden={!signedIn}>{window.location.pathname === '/oauth/consent' && client ? <OAuthConsent client={client} clientID={config?.mcp_client_id} onLogout={logout} /> : <MonthlySheet api={api} signedIn={signedIn} onDirty={value => { hasEdits.current = value; }} onLogout={logout} />}</div>}
+    {started && <div hidden={!signedIn}>{window.location.pathname === '/oauth/consent' && client
+      // Mount consent only once signed in: it loads the request with this tab's session.
+      ? signedIn && <OAuthConsent client={client} clientID={config?.mcp_client_id} onLogout={logout} />
+      : <MonthlySheet api={api} signedIn={signedIn} onDirty={value => { hasEdits.current = value; }} onLogout={logout} />}</div>}
   </>;
 }
 
