@@ -116,8 +116,8 @@ func TestMonthlyHTTPContractLifecycleAndRetry(t *testing.T) {
 	export := h.request(t, http.MethodGet, "/api/v1/exports", nil, "", "")
 	exported := expect(t, export, 200, "Export")
 	state := exported["state"].(map[string]any)
-	if state["monthly_sheet"].(map[string]any)["items"].(map[string]any)[item.ID] == nil || state["entries"] == nil {
-		t.Fatal("export lost monthly or legacy state")
+	if state["monthly_sheet"].(map[string]any)["items"].(map[string]any)[item.ID] == nil || state["entries"] != nil || state["monthly_drafts"] == nil {
+		t.Fatal("export lost monthly state or exposed retired fields")
 	}
 }
 
@@ -145,13 +145,9 @@ func TestMonthlyHTTPValidationAndOverflowRollback(t *testing.T) {
 	assertError(t, h.request(t, http.MethodPost, "/api/v1/monthly-sheets/not-month/open", map[string]any{}, domain.NewID(), ""), 422, "VALIDATION_FAILED")
 }
 
-func TestMonthlyHTTPSectionsAndLegacyFlag(t *testing.T) {
+func TestMonthlyHTTPSections(t *testing.T) {
 	h := newHarness(t)
-	createAccount(t, h, "Legacy synthetic bank")
 	opened := h.request(t, http.MethodPost, monthlyPath+"/open", map[string]any{}, domain.NewID(), "")
-	if !sheetResponse(t, opened).HasLegacyData {
-		t.Fatal("legacy data is hidden")
-	}
 	created := h.request(t, http.MethodPost, monthlyPath+"/sections", domain.MonthlySectionInput{Name: "Custom", Direction: "out"}, domain.NewID(), opened.headers.Get("ETag"))
 	sheet := sheetResponse(t, created)
 	if len(sheet.Sections) != 6 {

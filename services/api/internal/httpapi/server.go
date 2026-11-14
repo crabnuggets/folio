@@ -231,7 +231,7 @@ func (s *server) read(w http.ResponseWriter, r *http.Request, fn func(*domain.St
 }
 
 // mutate validates a UUID retry key, JSON media type, a body of at most 1 MiB,
-// and If-Match when versioned. It executes fn transactionally, validates summaries,
+// and If-Match when versioned. It executes fn transactionally,
 // and stores the encoded response for retries. Request identity includes method,
 // URI, If-Match, and exact body bytes; replayed responses carry Idempotency-Replayed.
 // Request, callback, summary, storage, and encoding errors are sent through writeError.
@@ -274,9 +274,6 @@ func mutate[T any](s *server, w http.ResponseWriter, r *http.Request, status int
 	result, replay, e := s.store.Execute(r.Context(), s.owner, key, hex.EncodeToString(hash[:]), func(state *domain.State) (store.Result, error) {
 		v, ver, err := fn(state, in, expected)
 		if err != nil {
-			return store.Result{}, err
-		}
-		if err := state.ValidateSummaries(); err != nil {
 			return store.Result{}, err
 		}
 		return store.JSON(status, v, ver)
@@ -352,8 +349,7 @@ func lookup[T any](r *http.Request, values map[string]T) (T, error) {
 	return v, nil
 }
 
-// routes registers financial reads, mutations, export, and deferred integration
-// endpoints, which respond with 501 FEATURE_NOT_AVAILABLE.
+// routes registers the authenticated monthly workflow.
 func (s *server) routes(m *http.ServeMux) {
 	s.chatGPTRoutes(m)
 	s.captureRoutes(m)
@@ -367,201 +363,6 @@ func (s *server) routes(m *http.ServeMux) {
 			return o, o.Version, e
 		})
 	})
-	m.HandleFunc("GET /api/v1/accounts", func(w http.ResponseWriter, r *http.Request) {
-		list(s, w, r, func(st *domain.State) map[string]domain.Account { return st.Accounts }, nil)
-	})
-	m.HandleFunc("POST /api/v1/accounts", func(w http.ResponseWriter, r *http.Request) {
-		mutate(s, w, r, 201, false, func(st *domain.State, in domain.AccountInput, _ int64) (any, int64, error) {
-			o, e := st.CreateAccount(in)
-			return o, o.Version, e
-		})
-	})
-	m.HandleFunc("GET /api/v1/accounts/{id}", func(w http.ResponseWriter, r *http.Request) {
-		s.read(w, r, func(st *domain.State) (any, int64, error) { o, e := lookup(r, st.Accounts); return o, o.Version, e })
-	})
-	m.HandleFunc("PATCH /api/v1/accounts/{id}", func(w http.ResponseWriter, r *http.Request) {
-		mutate(s, w, r, 200, true, func(st *domain.State, in domain.AccountInput, v int64) (any, int64, error) {
-			o, e := st.UpdateAccount(r.PathValue("id"), in, v)
-			return o, o.Version, e
-		})
-	})
-	m.HandleFunc("GET /api/v1/entries", func(w http.ResponseWriter, r *http.Request) {
-		list(s, w, r, func(st *domain.State) map[string]domain.Entry { return st.Entries }, func(v domain.Entry) bool {
-			return r.URL.Query().Get("month") == "" || v.ReportingMonth == r.URL.Query().Get("month")
-		})
-	})
-	m.HandleFunc("POST /api/v1/entries", func(w http.ResponseWriter, r *http.Request) {
-		mutate(s, w, r, 201, false, func(st *domain.State, in domain.EntryInput, _ int64) (any, int64, error) {
-			o, e := st.CreateEntry(in)
-			return o, o.Version, e
-		})
-	})
-	m.HandleFunc("GET /api/v1/entries/{id}", func(w http.ResponseWriter, r *http.Request) {
-		s.read(w, r, func(st *domain.State) (any, int64, error) { o, e := lookup(r, st.Entries); return o, o.Version, e })
-	})
-	m.HandleFunc("POST /api/v1/entries/{id}/corrections", func(w http.ResponseWriter, r *http.Request) {
-		mutate(s, w, r, 200, true, func(st *domain.State, in domain.EntryCorrection, v int64) (any, int64, error) {
-			o, e := st.CorrectEntry(r.PathValue("id"), in, v)
-			return o, o.Version, e
-		})
-	})
-	m.HandleFunc("GET /api/v1/statements", func(w http.ResponseWriter, r *http.Request) {
-		list(s, w, r, func(st *domain.State) map[string]domain.Statement { return st.Statements }, func(v domain.Statement) bool {
-			return r.URL.Query().Get("month") == "" || v.ReportingMonth == r.URL.Query().Get("month")
-		})
-	})
-	m.HandleFunc("POST /api/v1/statements", func(w http.ResponseWriter, r *http.Request) {
-		mutate(s, w, r, 201, false, func(st *domain.State, in domain.StatementInput, _ int64) (any, int64, error) {
-			o, e := st.CreateStatement(in)
-			return o, o.Version, e
-		})
-	})
-	m.HandleFunc("GET /api/v1/statements/{id}", func(w http.ResponseWriter, r *http.Request) {
-		s.read(w, r, func(st *domain.State) (any, int64, error) { o, e := lookup(r, st.Statements); return o, o.Version, e })
-	})
-	m.HandleFunc("POST /api/v1/statements/{id}/revisions", func(w http.ResponseWriter, r *http.Request) {
-		mutate(s, w, r, 201, true, func(st *domain.State, in domain.StatementRevision, v int64) (any, int64, error) {
-			o, e := st.ReviseStatement(r.PathValue("id"), in, v)
-			return o, o.Version, e
-		})
-	})
-	m.HandleFunc("POST /api/v1/statements/{id}/settlements", func(w http.ResponseWriter, r *http.Request) {
-		mutate(s, w, r, 201, true, func(st *domain.State, in domain.SettlementInput, v int64) (any, int64, error) {
-			o, e := st.CreateSettlement(r.PathValue("id"), in, v)
-			return o, o.Version, e
-		})
-	})
-	m.HandleFunc("POST /api/v1/statements/{id}/obligation-adjustments", func(w http.ResponseWriter, r *http.Request) {
-		mutate(s, w, r, 201, true, func(st *domain.State, in domain.ObligationAdjustmentInput, v int64) (any, int64, error) {
-			o, e := st.CreateObligationAdjustment(r.PathValue("id"), in, v)
-			return o, o.Version, e
-		})
-	})
-	m.HandleFunc("GET /api/v1/balance-snapshots", func(w http.ResponseWriter, r *http.Request) {
-		list(s, w, r, func(st *domain.State) map[string]domain.Snapshot { return st.Snapshots }, nil)
-	})
-	m.HandleFunc("POST /api/v1/balance-snapshots", func(w http.ResponseWriter, r *http.Request) {
-		mutate(s, w, r, 201, false, func(st *domain.State, in domain.SnapshotInput, _ int64) (any, int64, error) {
-			o, e := st.CreateSnapshot(in)
-			return o, o.Version, e
-		})
-	})
-	m.HandleFunc("GET /api/v1/claims", func(w http.ResponseWriter, r *http.Request) {
-		list(s, w, r, func(st *domain.State) map[string]domain.Claim { return st.Claims }, nil)
-	})
-	m.HandleFunc("POST /api/v1/claims", func(w http.ResponseWriter, r *http.Request) {
-		mutate(s, w, r, 201, false, func(st *domain.State, in domain.ClaimInput, _ int64) (any, int64, error) {
-			o, e := st.CreateClaim(in)
-			return o, o.Version, e
-		})
-	})
-	m.HandleFunc("GET /api/v1/claims/{id}", func(w http.ResponseWriter, r *http.Request) {
-		s.read(w, r, func(st *domain.State) (any, int64, error) { o, e := lookup(r, st.Claims); return o, o.Version, e })
-	})
-	m.HandleFunc("PATCH /api/v1/claims/{id}", func(w http.ResponseWriter, r *http.Request) {
-		mutate(s, w, r, 200, true, func(st *domain.State, in domain.ClaimInput, v int64) (any, int64, error) {
-			o, e := st.UpdateClaim(r.PathValue("id"), in, v)
-			return o, o.Version, e
-		})
-	})
-	m.HandleFunc("POST /api/v1/claims/{id}/receipt-matches", func(w http.ResponseWriter, r *http.Request) {
-		mutate(s, w, r, 201, true, func(st *domain.State, in domain.ReceiptMatchInput, v int64) (any, int64, error) {
-			o, e := st.MatchReceipt(r.PathValue("id"), in, v)
-			return o, o.Version, e
-		})
-	})
-	m.HandleFunc("GET /api/v1/months/{month}", func(w http.ResponseWriter, r *http.Request) {
-		s.read(w, r, func(st *domain.State) (any, int64, error) {
-			o, e := st.GetMonth(r.PathValue("month"))
-			return o, o.Version, e
-		})
-	})
-	m.HandleFunc("GET /api/v1/months/{month}/plan", func(w http.ResponseWriter, r *http.Request) {
-		s.read(w, r, func(st *domain.State) (any, int64, error) {
-			o, e := st.GetPlan(r.PathValue("month"))
-			return o, o.Version, e
-		})
-	})
-	m.HandleFunc("PUT /api/v1/months/{month}/plan", func(w http.ResponseWriter, r *http.Request) {
-		mutate(s, w, r, 200, true, func(st *domain.State, in domain.PlanInput, v int64) (any, int64, error) {
-			o, e := st.PutPlan(r.PathValue("month"), in, v)
-			return o, o.Version, e
-		})
-	})
-	m.HandleFunc("GET /api/v1/months/{month}/summary", func(w http.ResponseWriter, r *http.Request) {
-		s.read(w, r, func(st *domain.State) (any, int64, error) {
-			o, e := st.Summarize(r.PathValue("month"))
-			return o, o.Revision, e
-		})
-	})
-	m.HandleFunc("POST /api/v1/months/{month}/close", func(w http.ResponseWriter, r *http.Request) {
-		mutate(s, w, r, 200, true, func(st *domain.State, in domain.MonthTransition, v int64) (any, int64, error) {
-			o, e := st.CloseMonth(r.PathValue("month"), in, v)
-			return o, o.Version, e
-		})
-	})
-	m.HandleFunc("POST /api/v1/months/{month}/reopen", func(w http.ResponseWriter, r *http.Request) {
-		mutate(s, w, r, 200, true, func(st *domain.State, in domain.MonthTransition, v int64) (any, int64, error) {
-			o, e := st.ReopenMonth(r.PathValue("month"), in, v)
-			return o, o.Version, e
-		})
-	})
-	m.HandleFunc("GET /api/v1/months/{month}/insights", func(w http.ResponseWriter, r *http.Request) {
-		s.read(w, r, func(st *domain.State) (any, int64, error) {
-			o, e := st.Insights(r.PathValue("month"))
-			return map[string]any{"items": o}, 0, e
-		})
-	})
-	m.HandleFunc("GET /api/v1/recurrences", func(w http.ResponseWriter, r *http.Request) {
-		list(s, w, r, func(st *domain.State) map[string]domain.Recurrence { return st.Recurrences }, nil)
-	})
-	m.HandleFunc("POST /api/v1/recurrences", func(w http.ResponseWriter, r *http.Request) {
-		mutate(s, w, r, 201, false, func(st *domain.State, in domain.RecurrenceInput, _ int64) (any, int64, error) {
-			o, e := st.CreateRecurrence(in)
-			return o, o.Version, e
-		})
-	})
-	m.HandleFunc("POST /api/v1/recurrences/{id}/revisions", func(w http.ResponseWriter, r *http.Request) {
-		mutate(s, w, r, 201, true, func(st *domain.State, in domain.RecurrenceInput, v int64) (any, int64, error) {
-			o, e := st.ReviseRecurrence(r.PathValue("id"), in, v)
-			return o, o.Version, e
-		})
-	})
-	m.HandleFunc("GET /api/v1/reconciliation-periods", func(w http.ResponseWriter, r *http.Request) {
-		list(s, w, r, func(st *domain.State) map[string]domain.Period { return st.Periods }, nil)
-	})
-	m.HandleFunc("POST /api/v1/reconciliation-periods", func(w http.ResponseWriter, r *http.Request) {
-		mutate(s, w, r, 201, false, func(st *domain.State, in domain.PeriodInput, _ int64) (any, int64, error) {
-			o, e := st.CreatePeriod(in)
-			return o, o.Version, e
-		})
-	})
-	m.HandleFunc("GET /api/v1/drafts", func(w http.ResponseWriter, r *http.Request) {
-		list(s, w, r, func(st *domain.State) map[string]domain.Draft { return st.Drafts }, nil)
-	})
-	m.HandleFunc("POST /api/v1/drafts", func(w http.ResponseWriter, r *http.Request) {
-		mutate(s, w, r, 201, false, func(st *domain.State, in domain.DraftInput, _ int64) (any, int64, error) {
-			o, e := st.CreateDraft(in)
-			return o, o.Version, e
-		})
-	})
-	m.HandleFunc("GET /api/v1/drafts/{id}", func(w http.ResponseWriter, r *http.Request) {
-		s.read(w, r, func(st *domain.State) (any, int64, error) { o, e := lookup(r, st.Drafts); return o, o.Version, e })
-	})
-	m.HandleFunc("POST /api/v1/drafts/{id}/accept", func(w http.ResponseWriter, r *http.Request) {
-		mutate(s, w, r, 200, true, func(st *domain.State, in struct{}, v int64) (any, int64, error) {
-			o, e := st.AcceptDraft(r.PathValue("id"), v)
-			return o, o.Version, e
-		})
-	})
-	m.HandleFunc("POST /api/v1/drafts/{id}/reject", func(w http.ResponseWriter, r *http.Request) {
-		mutate(s, w, r, 200, true, func(st *domain.State, in struct {
-			Reason string `json:"reason"`
-		}, v int64) (any, int64, error) {
-			o, e := st.RejectDraft(r.PathValue("id"), in.Reason, v)
-			return o, o.Version, e
-		})
-	})
 	m.HandleFunc("GET /api/v1/audit-events", func(w http.ResponseWriter, r *http.Request) {
 		list(s, w, r, func(st *domain.State) map[string]domain.Audit {
 			o := map[string]domain.Audit{}
@@ -571,30 +372,11 @@ func (s *server) routes(m *http.ServeMux) {
 			return o
 		}, nil)
 	})
-	m.HandleFunc("GET /api/v1/legacy-month-summaries", func(w http.ResponseWriter, r *http.Request) {
-		list(s, w, r, func(st *domain.State) map[string]domain.LegacySummary {
-			o := map[string]domain.LegacySummary{}
-			for _, v := range st.LegacySummaries {
-				o[v.ID] = v
-			}
-			return o
-		}, nil)
-	})
 	m.HandleFunc("GET /api/v1/exports", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Disposition", `attachment; filename="folio-export-v1.json"`)
+		w.Header().Set("Content-Disposition", `attachment; filename="folio-monthly-export-v2.json"`)
 		s.read(w, r, func(st *domain.State) (any, int64, error) {
-			financialState := *st
-			financialState.ChatGPTConnection = nil
-			return struct {
-				SchemaVersion int           `json:"schema_version"`
-				ExportedAt    time.Time     `json:"exported_at"`
-				State         *domain.State `json:"state"`
-			}{1, time.Now().UTC(), &financialState}, 0, nil
+			return map[string]any{"schema_version": 2, "exported_at": time.Now().UTC(), "state": map[string]any{"settings": st.Settings, "monthly_sheet": st.MonthlySheet, "monthly_drafts": st.MonthlyDrafts, "audit_events": st.AuditEvents}}, 0, nil
 		})
 	})
-	for _, pattern := range []string{"POST /api/v1/imports", "GET /api/v1/imports/{id}", "POST /api/v1/gmail/connect", "GET /api/v1/gmail/callback", "POST /api/v1/gmail/sync", "DELETE /api/v1/gmail/connection", "POST /api/v1/capture/text"} {
-		m.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
-			writeError(w, r, domain.Fail(501, "FEATURE_NOT_AVAILABLE", "This integration is defined for a later implementation phase"))
-		})
-	}
+	s.monthlyDraftRoutes(m)
 }

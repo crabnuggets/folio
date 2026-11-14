@@ -118,13 +118,13 @@ describe('complete list pagination', () => {
   it('reads every page and preserves the month filter', async () => {
     const transport = vi.fn<typeof fetch>().mockResolvedValueOnce(json({ items: [{ id: 'a' }], next_cursor: 'cursor-1' })).mockResolvedValue(json({ items: [{ id: 'b' }], next_cursor: null }));
     const api = new ApiClient(transport); api.setToken('owner');
-    expect(await api.list<'Entry'>('/entries?month=2026-10')).toEqual([{ id: 'a' }, { id: 'b' }]);
+    expect(await api.list<'MonthlyDraft'>('/monthly-drafts?month=2026-10')).toEqual([{ id: 'a' }, { id: 'b' }]);
     expect(String(transport.mock.calls[1][0])).toContain('month=2026-10&limit=100&cursor=cursor-1');
   });
   it('fails explicitly if a server cursor loops', async () => {
     const transport = vi.fn<typeof fetch>().mockImplementation(async () => json({ items: [], next_cursor: 'same' }));
     const api = new ApiClient(transport); api.setToken('owner');
-    await expect(api.list<'Account'>('/accounts')).rejects.toThrow('repeated a pagination cursor');
+    await expect(api.list<'MonthlyDraft'>('/monthly-drafts')).rejects.toThrow('repeated a pagination cursor');
     expect(transport).toHaveBeenCalledTimes(2);
   });
 });

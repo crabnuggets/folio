@@ -5,19 +5,23 @@ import (
 	"testing"
 )
 
-func TestRequiredFieldsAndNullsPreserveWireContract(t *testing.T) {
-	for _, body := range []string{`{"alias":"Cash","kind":"cash","currency":"SGD"}`, `{"alias":"Cash","kind":"cash","currency":"SGD","active":null}`, `{"alias":"Cash","kind":"cash","currency":"SGD","active":false,"include_in_liquid_cash":null}`, `{"alias":"Cash","kind":"cash","currency":"SGD","active":false,"unknown":true}`, `null`, `[]`, `{} {}`} {
-		if _, err := readJSON[domain.AccountInput]([]byte(body)); err == nil {
-			t.Fatalf("accepted malformed account: %s", body)
+func TestMonthlyDraftReviewRequiresCanonicalExplicitMoney(t *testing.T) {
+	for _, body := range []string{
+		`{"section_id":"section","name":"Card","note":""}`,
+		`{"section_id":"section","name":"Card","amount_minor":null,"note":""}`,
+		`{"section_id":"section","name":"Card","amount_minor":0,"note":""}`,
+		`{"section_id":"section","name":"Card","amount_minor":"01","note":""}`,
+		`{"section_id":"section","name":"Card","amount_minor":"9223372036854775808","note":""}`,
+		`{"section_id":"section","name":"Card","amount_minor":"0","note":"","owner_id":"someone"}`,
+	} {
+		if _, err := readJSON[domain.MonthlyDraftEdit]([]byte(body)); err == nil {
+			t.Fatalf("accepted ambiguous review input: %s", body)
 		}
 	}
-	if _, err := readJSON[domain.AccountInput]([]byte(`{"alias":"Cash","kind":"cash","currency":"SGD","active":false}`)); err != nil {
-		t.Fatal(err)
+	if _, err := readJSON[domain.MonthlyDraftEdit]([]byte(`{"section_id":"section","name":"Card","amount_minor":"0","note":""}`)); err != nil {
+		t.Fatal("explicit zero must stay valid", err)
 	}
-	if _, err := readJSON[domain.StatementInput]([]byte(`{"account_id":"a","currency":"SGD","cycle_start":"2026-09-01","cycle_end":"2026-09-30","issue_date":"2026-10-01","due_date":"2026-10-20"}`)); err == nil {
-		t.Fatal("omitted due amount became zero")
-	}
-	if _, err := readJSON[domain.DraftInput]([]byte(`{"source_id":"manual","external_id":"one","evidence":"Synthetic","entry":{"kind":"income"}}`)); err != nil {
-		t.Fatalf("partial candidate must remain stageable: %v", err)
+	if _, err := readJSON[domain.MonthlyDraftAccept]([]byte(`{}`)); err == nil {
+		t.Fatal("acceptance must include sheet version")
 	}
 }

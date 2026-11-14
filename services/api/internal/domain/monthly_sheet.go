@@ -160,15 +160,13 @@ func (s *State) monthlyFinish(month string, before MonthlySheetData, undo bool) 
 	return result, err
 }
 
-// GetMonthlySheet reads only this model's persisted cells. Legacy financial
-// postings never contribute to its totals, even for a closed legacy month.
+// GetMonthlySheet calculates totals from entered monthly amounts.
 func (s *State) GetMonthlySheet(month string) (MonthlySheet, error) {
 	if !ValidMonth(month) {
 		return MonthlySheet{}, Invalid("Invalid monthly sheet month")
 	}
 	result := MonthlySheet{Month: month, Version: s.MonthlySheet.Version, Currency: s.Settings.Currency, CurrencyExponent: s.Settings.CurrencyExponent, Sections: []MonthlySection{}}
 	result.CurrencyLocked = s.currencyLocked()
-	result.HasLegacyData = len(s.Accounts)+len(s.Entries)+len(s.Statements)+len(s.Claims)+len(s.Snapshots)+len(s.Plans)+len(s.Recurrences)+len(s.Periods)+len(s.Drafts)+len(s.LegacySummaries) > 0
 	var incoming, outgoing summarySum
 	for _, section := range s.MonthlySheet.Sections {
 		view := MonthlySection{MonthlySectionDefinition: section, Items: []MonthlyItem{}}
@@ -296,12 +294,18 @@ func (s *State) AddMonthlyItem(month string, in MonthlyItemInput, expected int64
 		// below applies the submitted fields; explicit Restore recovers old fields.
 		return s.monthlyFinish(month, before, true)
 	}
+	if len(in.Explanations) > 0 && section.Direction != "out" {
+		return MonthlySheet{}, Invalid("Only money out items can have explanations")
+	}
+	if _, err := monthlyUnexplained(in.AmountMinor, in.Explanations); err != nil {
+		return MonthlySheet{}, err
+	}
 	if s.MonthlySheet.Rows[month] == nil {
 		s.MonthlySheet.Rows[month] = map[string]MonthlyStoredRow{}
 	}
 	s.setMonthlyPreference(&item, month, section.ID, repeat, usual)
 	s.MonthlySheet.Items[item.ID] = item
-	s.MonthlySheet.Rows[month][item.ID] = MonthlyStoredRow{ItemID: item.ID, SectionID: section.ID, AmountMinor: in.AmountMinor, Note: in.Note, Touched: true}
+	s.MonthlySheet.Rows[month][item.ID] = MonthlyStoredRow{ItemID: item.ID, SectionID: section.ID, AmountMinor: in.AmountMinor, Note: in.Note, Touched: true, Explanations: in.Explanations}
 	if in.AmountMinor != nil || usual != nil {
 		s.MonthlySheet.CurrencyLocked = true
 	}

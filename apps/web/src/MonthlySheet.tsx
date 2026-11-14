@@ -7,6 +7,7 @@ import { Dialog } from './components/Dialog';
 import { ThemeToggle } from './components/ThemeToggle';
 import { Form, text } from './components/Form';
 import { TransactionChat } from './TransactionChat';
+import { MonthlyDraftReview } from './MonthlyDraftReview';
 
 type Sheet = S['MonthlySheet'];
 type Item = S['MonthlyItem'];
@@ -61,7 +62,8 @@ export function MonthlySheet({ api, signedIn, onDirty, onLogout }: { api: ApiCli
   const [summaryElement, setSummaryElement] = useState<HTMLElement | null>(null);
   const [summaryVisible, setSummaryVisible] = useState(true);
   const [chatDirty, setChatDirty] = useState(false);
-  const blocked = dirty.size > 0 || queue.current.length > 0 || chatDirty;
+  const [draftDirty, setDraftDirty] = useState(false);
+  const blocked = dirty.size > 0 || queue.current.length > 0 || chatDirty || draftDirty;
   const accept = (value: Sheet) => { sheetRef.current = value; setSheet(value); };
   const markDirty = (key: string, value: boolean) => {
     if (value) dirtyRef.current.add(key); else dirtyRef.current.delete(key);
@@ -202,7 +204,7 @@ export function MonthlySheet({ api, signedIn, onDirty, onLogout }: { api: ApiCli
             const result = await api.get<'Export'>('/exports');
             const url = URL.createObjectURL(new Blob([JSON.stringify(result, null, 2)], { type: 'application/json' }));
             const link = document.createElement('a'); link.href = url; link.download = `folio-export-${new Date().toISOString().slice(0, 10)}.json`; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
-            setToast({ text: 'JSON export downloaded. It includes retained financial history.' });
+            setToast({ text: 'Monthly sheets and draft history exported.' });
           } catch (error) { setToast({ text: `Export failed. ${errorMessage(error)}`, sticky: true }); }
         }} />
       </div>
@@ -224,8 +226,8 @@ export function MonthlySheet({ api, signedIn, onDirty, onLogout }: { api: ApiCli
             <FlowMeter moneyIn={sheet.money_in_minor} moneyOut={sheet.money_out_minor} />
           </div>
         </section>
-        {sheet.has_legacy_data && <p className="notice">Your earlier financial data is retained separately and included in export. It has not been converted into monthly amounts.</p>}
 
+        <MonthlyDraftReview key={month} api={api} sheet={sheet} signedIn={signedIn} disabled={blocked || !available} onDirty={setDraftDirty} feedback={id => feedback(`draft-${id}`)} onAccept={(draft, done) => perform(`draft-${draft.id}`, latest => api.command<'MonthlySheet'>(`/monthly-drafts/${draft.id}/accept`, { sheet_version: latest.version }, { version: draft.version }), result => { done(); setToast({ text: 'Proposal accepted.', undo: result.undo_token ? 'Undo' : undefined }); })} />
         <div className="sheet-columns">{(['in', 'out'] as const).map(direction => <div className="sheet-column" key={direction}><h2>Money {direction}</h2>
           {sheet.sections.filter(section => section.direction === direction).map(section => <section className="sheet-section" key={section.id} aria-label={section.name}>
             <div className="section-heading"><div><h3>{section.name}</h3>{(section.amount_label === 'Bill amount' || section.missing_count > 0) && <span className="section-meta">{section.amount_label === 'Bill amount' && <span>Bill amounts</span>}{section.missing_count > 0 && <span className="attention">{section.missing_count} blank</span>}</span>}</div>{section.items.length > 0 && <output aria-label={`${section.name} subtotal`}>{groupAmount(moneyInput(section.total_minor, sheet.currency_exponent))}</output>}</div>

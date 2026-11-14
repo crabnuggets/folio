@@ -23,7 +23,7 @@ test('one monthly sheet accounts for a complete synthetic month and exports serv
   const downloadPromise = page.waitForEvent('download');
   await page.getByRole('banner').getByRole('button', { name: 'Export JSON', exact: true }).click();
   const download = await downloadPromise; expect(download.suggestedFilename()).toMatch(/^folio-export-.*\.json$/);
-  const exported = await backend.get<'Export'>('/exports'); expect(exported.schema_version).toBe(1);
+  const exported = await backend.get<'Export'>('/exports'); expect(exported.schema_version).toBe(2);
   expect(Object.keys(exported.state.monthly_sheet.rows[month])).toHaveLength(8);
 });
 

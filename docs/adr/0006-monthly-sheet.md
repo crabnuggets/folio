@@ -1,6 +1,6 @@
 # ADR 0006: Make a monthly sheet the primary accounting model
 
-Status: Accepted, 2026-10-29. Supersedes ADR 0002 and ADR 0003 as requirements for the default user experience; their financial models remain valid for retained legacy data.
+Status: Accepted, 2026-10-29. Supersedes ADR 0002 and ADR 0003 as requirements for the default user experience; their financial models remain valid for retained legacy data. Its retention of legacy endpoints and the combined export is superseded by ADR 0007.
 
 The user found the initial application too complicated for a monthly check-in. Use named incoming and outgoing monthly amounts, organized into sections, as the primary model. A credit card amount is the **bill amount assigned to that month**, as explicitly confirmed by the user. The monthly remainder is entered money in minus entered money out, including savings and investment contributions. It does not claim to measure confirmed cash movements, consumption, or a bank balance.
 

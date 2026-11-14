@@ -7,7 +7,7 @@ import { ApiClient, type S } from '../src/lib/api';
 import { MonthlySheet } from '../src/MonthlySheet';
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.useRealTimers(); });
 const settings: S['Settings'] = { currency: 'SGD', currency_exponent: 2, timezone: 'Asia/Singapore', version: 1 };
-const emptySheet: S['MonthlySheet'] = { month: '2026-10', version: 1, currency: 'SGD', currency_exponent: 2, currency_locked: false, has_legacy_data: false, undo_token: null, money_in_minor: '0', money_out_minor: '0', remainder_minor: '0', missing_count: 0, sections: [{ id: 'income', name: 'Income', direction: 'in', amount_label: 'Amount', total_minor: '0', missing_count: 0, items: [] }] };
+const emptySheet: S['MonthlySheet'] = { month: '2026-10', version: 1, currency: 'SGD', currency_exponent: 2, currency_locked: false, undo_token: null, money_in_minor: '0', money_out_minor: '0', remainder_minor: '0', missing_count: 0, sections: [{ id: 'income', name: 'Income', direction: 'in', amount_label: 'Amount', total_minor: '0', missing_count: 0, items: [] }] };
 function mount() { render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false } } })}><App /></QueryClientProvider>); }
 function transport() { return vi.fn<typeof fetch>(async (input, init) => {
   const url = String(input); if (url.endsWith('/settings')) return new Response(JSON.stringify(settings));

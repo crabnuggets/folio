@@ -20,6 +20,8 @@ type Config struct {
 	Auth        auth.Config
 	ChatGPT     chatgpt.Config
 	BrowserAuth auth.BrowserConfig
+	MCPOrigin   string
+	MCPClientID string
 }
 
 // Load reads configuration from process environment variables, returning FromEnv errors.
@@ -91,5 +93,16 @@ func FromEnv(get func(string) string) (Config, error) {
 	if webDistDir != "" && mode == "jwt" && browser.PublishableKey == "" {
 		return Config{}, errors.New("SUPABASE_PUBLISHABLE_KEY is required when serving the web app in JWT mode")
 	}
-	return Config{Address: ":" + port, DatabaseURL: databaseURL, OwnerID: owner, WebDistDir: webDistDir, Auth: a, ChatGPT: connection, BrowserAuth: browser}, nil
+	mcpOrigin, mcpClient := get("MCP_PUBLIC_ORIGIN"), strings.ToLower(get("MCP_CLIENT_ID"))
+	if mcpOrigin != "" || mcpClient != "" {
+		origin, err := url.Parse(mcpOrigin)
+		if err != nil || origin.Scheme != "https" || origin.Host == "" || origin.Path != "" || origin.RawQuery != "" || origin.ForceQuery || origin.Fragment != "" || origin.User != nil {
+			return Config{}, errors.New("MCP_PUBLIC_ORIGIN must be a canonical HTTPS origin without a trailing slash")
+		}
+		if mode != "jwt" || !domain.ValidID(mcpClient) || browser.SupabaseURL == "" {
+			return Config{}, errors.New("MCP requires Supabase browser auth and a registered MCP_CLIENT_ID UUID")
+		}
+		browser.MCPClientID = mcpClient
+	}
+	return Config{Address: ":" + port, DatabaseURL: databaseURL, OwnerID: owner, WebDistDir: webDistDir, Auth: a, ChatGPT: connection, BrowserAuth: browser, MCPOrigin: mcpOrigin, MCPClientID: mcpClient}, nil
 }

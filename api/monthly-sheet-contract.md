@@ -83,7 +83,7 @@ Custom sections have amount_label `Amount`. Renaming retains direction and label
 ```json
 {
   "month":"2026-10","version":1,"currency":"SGD","currency_exponent":2,
-  "currency_locked":false,"has_legacy_data":false,"undo_token":null,
+  "currency_locked":false,"undo_token":null,
   "money_in_minor":"0","money_out_minor":"0","remainder_minor":"0","missing_count":0,
   "sections":[{
     "id":"UUID","name":"Credit cards","direction":"out","amount_label":"Bill amount",
@@ -126,13 +126,13 @@ Suggested section UUIDs and order are stable:
 
 All totals sum active leaf amounts once in Go. Blank rows add to missing_count;
 zero does not. A card amount is its bill amount for this month. No payment posting
-or old summary contributes. `has_legacy_data` indicates retained old financial data.
-`GET /exports` retains schema_version 1 and adds `state.monthly_sheet` containing
+or old summary contributes. Retired aggregate fields are not exposed through this contract.
+`GET /exports` uses schema_version 2 and includes `state.monthly_sheet` containing
 sections, item identities and aliases, effective preferences, all monthly rows,
 skips, version and latest Undo state. Currency locks once any monthly or usual
 amount exists, including zero or a removed amount. No migration is inferred.
 `currency_locked` reports the same owner-wide immutability predicate used by
-Settings, including retained legacy financial setup. An empty selected month
+Settings. Historical non-SGD settings stay read-only. An empty selected month
 does not imply that currency can change.
 
 ## Validation evidence

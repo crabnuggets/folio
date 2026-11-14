@@ -55,6 +55,10 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	handler, err = httpapi.WithMCP(handler, db, cfg.OwnerID, cfg.MCPOrigin, cfg.MCPClientID, cfg.Auth)
+	if err != nil {
+		return err
+	}
 	server := &http.Server{Addr: cfg.Address, Handler: handler, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 32 << 10}
 	result := make(chan error, 1)
 	go func() { slog.Info("API listening", "address", cfg.Address); result <- server.ListenAndServe() }()

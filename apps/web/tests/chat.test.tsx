@@ -11,7 +11,7 @@ const connection: S['ChatGPTConnection'] = { available: true, connected: true, s
 const capture: S['ChatCaptureResponse'] = { message: 'Review your coffee amount.', items: [{ name: 'Coffee', section_id: 'out', amount_minor: '450', note: 'From your description' }] };
 const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status });
 function setup(options: { lostWrite?: boolean; expiredCapture?: boolean; connected?: boolean } = {}) {
-  const sheet: S['MonthlySheet'] = { month: '2026-10', version: 1, currency: 'SGD', currency_exponent: 2, currency_locked: false, has_legacy_data: false, undo_token: null, money_in_minor: '0', money_out_minor: '0', remainder_minor: '0', missing_count: 0, sections: [{ id: 'in', name: 'Income', direction: 'in', amount_label: 'Amount', total_minor: '0', missing_count: 0, items: [] }, { id: 'out', name: 'Other money out', direction: 'out', amount_label: 'Amount', total_minor: '0', missing_count: 0, items: [] }] };
+  const sheet: S['MonthlySheet'] = { month: '2026-10', version: 1, currency: 'SGD', currency_exponent: 2, currency_locked: false, undo_token: null, money_in_minor: '0', money_out_minor: '0', remainder_minor: '0', missing_count: 0, sections: [{ id: 'in', name: 'Income', direction: 'in', amount_label: 'Amount', total_minor: '0', missing_count: 0, items: [] }, { id: 'out', name: 'Other money out', direction: 'out', amount_label: 'Amount', total_minor: '0', missing_count: 0, items: [] }] };
   let writes = 0;
   const transport = vi.fn<typeof fetch>(async (input, init) => {
     const path = String(input);
