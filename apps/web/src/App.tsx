@@ -5,6 +5,7 @@ import { ApiClient, errorMessage } from './lib/api';
 import { tokenExpiry } from './lib/session';
 import { authStorageKey, loadBrowserAuth, signInWithGoogle, type BrowserAuth } from './lib/googleAuth';
 import { Brand } from './components/Brand';
+import { ThemeToggle } from './components/ThemeToggle';
 import { Form, text } from './components/Form';
 import { MonthlySheet } from './MonthlySheet';
 
@@ -99,7 +100,7 @@ function SignedInApp() {
   }, []);
   return <>
     {!signedIn && <main className="login-page"><div className="login-card">
-      <Brand />
+      <div className="login-heading"><Brand /><ThemeToggle /></div>
       <h1>One sheet for each month.</h1>
       <p className="login-lede">Enter what comes in and what goes out. See what remains.</p>
       {message && <p className="notice" role="status">{message}</p>}

@@ -4,6 +4,7 @@ import { ApiClient, ApiError, errorMessage, isUncertain, type Command, type S } 
 import { formatMoney, formatMonth, groupAmount, monthNames, moneyInput, parseMoney } from './lib/money';
 import { Alert, Brand, Check, ChevronDown, ChevronLeft, ChevronRight, Close, More, Plus, Redo, Undo } from './components/Brand';
 import { Dialog } from './components/Dialog';
+import { ThemeToggle } from './components/ThemeToggle';
 import { Form, text } from './components/Form';
 import { TransactionChat } from './TransactionChat';
 
@@ -284,7 +285,7 @@ function AppMenu({ signOutDisabled, sectionsDisabled, onSections, onExport, onLo
   const choose = (action: () => void) => () => { setOpen(false); trigger.current?.focus(); action(); };
   return <div className="app-menu" ref={root} onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false); }} onKeyDown={event => { if (event.key === 'Escape' && open) { setOpen(false); trigger.current?.focus(); } }}>
     <button ref={trigger} className="icon-button" aria-label="Menu" title="Menu" aria-expanded={open} onClick={() => setOpen(!open)}><More /></button>
-    {open && <div className="popover app-menu-list"><button disabled={sectionsDisabled} onClick={choose(onSections)}>Manage sections</button><button onClick={choose(onExport)}>Export JSON</button><hr /><button disabled={signOutDisabled} title={signOutDisabled ? 'Save or discard your changes to sign out' : undefined} onClick={choose(onLogout)}>Sign out</button></div>}
+    {open && <div className="popover app-menu-list"><ThemeToggle showLabel /><hr /><button disabled={sectionsDisabled} onClick={choose(onSections)}>Manage sections</button><button onClick={choose(onExport)}>Export JSON</button><hr /><button disabled={signOutDisabled} title={signOutDisabled ? 'Save or discard your changes to sign out' : undefined} onClick={choose(onLogout)}>Sign out</button></div>}
   </div>;
 }
 
