@@ -108,6 +108,24 @@ func TestMCPAuthenticatedStreamableToolsAndUIAcceptance(t *testing.T) {
 			}
 		})
 	}
+	for _, tc := range []struct {
+		origin  string
+		allowed bool
+	}{{"https://claude.ai", true}, {"https://claude.com", true}, {origin, true}, {"https://evil.example", false}} {
+		r, _ := http.NewRequest("POST", host.URL+"/mcp", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/list"}`))
+		r.Header.Set("Content-Type", "application/json")
+		r.Header.Set("Accept", "application/json, text/event-stream")
+		r.Header.Set("Authorization", "Bearer "+valid)
+		r.Header.Set("Origin", tc.origin)
+		resp, err := host.Client().Do(r)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		if (resp.StatusCode == 403) == tc.allowed {
+			t.Fatalf("origin %s: status %d", tc.origin, resp.StatusCode)
+		}
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	client := mcp.NewClient(&mcp.Implementation{Name: "synthetic-test", Version: "1"}, nil)
