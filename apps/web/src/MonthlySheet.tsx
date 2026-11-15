@@ -6,7 +6,6 @@ import { Alert, Brand, Check, ChevronDown, ChevronLeft, ChevronRight, Close, Mor
 import { Dialog } from './components/Dialog';
 import { ThemeToggle } from './components/ThemeToggle';
 import { Form, text } from './components/Form';
-import { TransactionChat } from './TransactionChat';
 import { MonthlyDraftReview } from './MonthlyDraftReview';
 
 type Sheet = S['MonthlySheet'];
@@ -61,9 +60,8 @@ export function MonthlySheet({ api, signedIn, onDirty, onLogout }: { api: ApiCli
   const [sectionFormKey, setSectionFormKey] = useState(0);
   const [summaryElement, setSummaryElement] = useState<HTMLElement | null>(null);
   const [summaryVisible, setSummaryVisible] = useState(true);
-  const [chatDirty, setChatDirty] = useState(false);
   const [draftDirty, setDraftDirty] = useState(false);
-  const blocked = dirty.size > 0 || queue.current.length > 0 || chatDirty || draftDirty;
+  const blocked = dirty.size > 0 || queue.current.length > 0 || draftDirty;
   const accept = (value: Sheet) => { sheetRef.current = value; setSheet(value); };
   const markDirty = (key: string, value: boolean) => {
     if (value) dirtyRef.current.add(key); else dirtyRef.current.delete(key);
@@ -191,7 +189,7 @@ export function MonthlySheet({ api, signedIn, onDirty, onLogout }: { api: ApiCli
   const hasEntries = Boolean(sheet && (sheet.sections.some(section => section.items.length > 0) || sheet.remainder_minor !== '0'));
   const failed = Object.values(jobs).some(job => job.status === 'failed');
   const pending = queue.current.length > 0;
-  const status = !online ? 'Waiting for connection' : loading ? 'Loading…' : loadError != null ? 'Not loaded' : failed ? 'Not saved' : pending ? 'Saving…' : dirty.size ? 'Unsaved changes' : chatDirty ? 'Draft in chat' : available ? 'All changes saved' : 'Unavailable';
+  const status = !online ? 'Waiting for connection' : loading ? 'Loading…' : loadError != null ? 'Not loaded' : failed ? 'Not saved' : pending ? 'Saving…' : dirty.size ? 'Unsaved changes' : available ? 'All changes saved' : 'Unavailable';
   return <div className="sheet-shell"><a className="skip-link" href="#main">Skip to content</a>
     <header className={`topbar ${!summaryVisible && sheet || status !== 'All changes saved' ? 'has-strip' : ''}`}><div className="topbar-inner">
       <div className="topbar-lead"><Brand />{!summaryVisible && sheet && <span className="topbar-remainder">Remainder <strong className={sheet.remainder_minor.startsWith('-') ? 'money critical' : 'money'}>{money(sheet.remainder_minor)}</strong>{sheet.missing_count > 0 && <span className="attention topbar-blank">{sheet.missing_count} blank</span>}</span>}</div>
@@ -250,17 +248,10 @@ export function MonthlySheet({ api, signedIn, onDirty, onLogout }: { api: ApiCli
         </Dialog>}
       </>}
     </main>
-    <div className="bottom-stack" hidden={!sheet && !toast}>
+    <div className="bottom-stack" hidden={!toast}>
       {toast && <div className="toast" role="status"><span className="toast-text">{toast.text}</span>
         {toast.undo && <button className="toast-action" disabled={blocked || !available} onClick={() => void history('undo')}>{toast.undo}</button>}
         <button className="toast-close" aria-label="Dismiss message" onClick={() => setToast(null)}><Close /></button></div>}
-      <TransactionChat api={api} signedIn={signedIn} month={month} sheet={sheet} available={Boolean(available)} unavailable={!online ? 'Chat needs a connection' : loadError != null ? 'Chat is unavailable until the sheet loads' : loading ? 'Loading your sheet…' : 'Chat is unavailable for this month'} saving={queue.current.length > 0} onDirty={setChatDirty} feedback={feedback} locked={locked} onAdd={async (key, input, done) => {
-        const latest = sheetRef.current;
-        if (!latest || !available || queue.current.length > 0) return false;
-        const direction = latest.sections.find(section => section.id === input.section_id)?.direction;
-        if (latest.sections.some(section => section.direction === direction && section.items.some(item => normalize(item.name) === normalize(input.name)))) throw new Error('An item with this name already exists on this side of the sheet. Edit that item, or use a different name.');
-        return perform(key, current => api.command<'MonthlySheet'>(`/monthly-sheets/${month}/items`, input, { version: current.version }), done);
-      }} />
     </div>
   </div>;
 }

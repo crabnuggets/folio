@@ -7,6 +7,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -137,7 +138,7 @@ func TestMCPAuthenticatedStreamableToolsAndUIAcceptance(t *testing.T) {
 	}
 	defer session.Close()
 	tools, err := session.ListTools(ctx, nil)
-	if err != nil || len(tools.Tools) != 3 {
+	if err != nil || len(tools.Tools) != 4 {
 		t.Fatalf("tools: %+v %v", tools, err)
 	}
 	for _, tool := range tools.Tools {
@@ -166,13 +167,26 @@ func TestMCPAuthenticatedStreamableToolsAndUIAcceptance(t *testing.T) {
 		t.Fatal("empty totals")
 	}
 	input := map[string]any{"month": "2026-11", "section_id": cardSection, "name": "MCP card", "amount_minor": "1250", "note": "Test", "evidence": "Synthetic source", "source_id": "test:mcp", "external_id": "one", "sheet_version": sheet["version"], "explanations": []map[string]any{{"name": "Grocer", "amount_minor": "1000"}}}
-	draft := call("create_monthly_item_draft", input)
-	if parts := draft["explanations"].([]any); len(parts) != 1 || parts[0].(map[string]any)["amount_minor"] != "1000" {
-		t.Fatalf("breakdown not stored: %v", draft["explanations"])
+	created := call("create_monthly_item_draft", input)
+	draft := created["draft"].(map[string]any)
+	if parts := draft["explanations"].([]any); created["outcome"] != "created" || len(parts) != 1 || parts[0].(map[string]any)["amount_minor"] != "1000" {
+		t.Fatalf("breakdown not stored: %v", created)
 	}
 	retry := call("create_monthly_item_draft", input)
-	if draft["id"] != retry["id"] || draft["state"] != "pending" {
+	if draft["id"] != retry["draft"].(map[string]any)["id"] || draft["state"] != "pending" || retry["outcome"] != "already_proposed" {
 		t.Fatal("proposal not deduplicated")
+	}
+	reread := map[string]any{}
+	for k, v := range input {
+		reread[k] = v
+	}
+	reread["note"], reread["evidence"] = "Same statement uploaded again", "Synthetic source, page 1"
+	if again := call("create_monthly_item_draft", reread); again["outcome"] != "already_proposed" || again["draft"].(map[string]any)["id"] != draft["id"] {
+		t.Fatalf("re-read of the same document not reported: %v", again)
+	}
+	reread["amount_minor"] = "1300"
+	if conflict, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "create_monthly_item_draft", Arguments: reread}); err != nil || !conflict.IsError || !strings.Contains(conflict.Content[0].(*mcp.TextContent).Text, draft["id"].(string)) {
+		t.Fatalf("conflict does not name the existing proposal: %+v %v", conflict, err)
 	}
 	pending := call("list_pending_monthly_drafts", map[string]any{"month": "2026-11"})
 	if len(pending["items"].([]any)) != 1 {
@@ -206,6 +220,36 @@ func TestMCPAuthenticatedStreamableToolsAndUIAcceptance(t *testing.T) {
 	}
 	if count := call("list_pending_monthly_drafts", map[string]any{"month": "2026-11"}); len(count["items"].([]any)) != 0 {
 		t.Fatal("accepted proposal still pending")
+	}
+	if replayed := call("create_monthly_item_draft", input); replayed["outcome"] != "already_proposed" || replayed["draft"].(map[string]any)["state"] != "accepted" {
+		t.Fatalf("exact retry reported a stale proposal: %v", replayed)
+	}
+	sheet = call("read_monthly_sheet", map[string]any{"month": "2026-11"})
+	var itemID string
+	for _, section := range sheet["sections"].([]any) {
+		for _, item := range section.(map[string]any)["items"].([]any) {
+			if item.(map[string]any)["name"] == "MCP card" {
+				itemID = item.(map[string]any)["id"].(string)
+			}
+		}
+	}
+	amended := call("propose_monthly_item_amendment", map[string]any{"month": "2026-11", "item_id": itemID, "amount_minor": "1250", "note": "Adds the cafe charge", "evidence": "Synthetic source", "source_id": "test:mcp", "external_id": "one-detail", "sheet_version": sheet["version"], "explanations": []map[string]any{{"name": "Grocer", "amount_minor": "1000"}, {"name": "Cafe", "amount_minor": "250"}}})
+	amendment := amended["draft"].(map[string]any)
+	if base := amendment["amendment"].(map[string]any); amended["outcome"] != "created" || base["item_id"] != itemID || base["base_amount_minor"] != "1250" || amendment["name"] != "MCP card" {
+		t.Fatalf("amendment not staged: %v", amended)
+	}
+	listed := request("GET", "/api/v1/monthly-drafts?month=2026-11", uiToken, "", "")
+	body, _ = io.ReadAll(listed.Body)
+	assertSchema(t, "MonthlyDraftPage", body)
+	accepted = request("POST", "/api/v1/monthly-drafts/"+amendment["id"].(string)+"/accept", uiToken, fmt.Sprintf(`{"sheet_version":%v}`, sheet["version"]), `"1"`)
+	body, _ = io.ReadAll(accepted.Body)
+	if accepted.StatusCode != 200 {
+		t.Fatalf("amendment accept %d: %s", accepted.StatusCode, body)
+	}
+	state, _ = db.Read(ctx, ownerID)
+	entered, _ = state.GetMonthlySheet("2026-11")
+	if entered.MoneyOutMinor != 1250 || state.MonthlySheet.Rows["2026-11"][itemID].Explanations[1].Name != "Cafe" {
+		t.Fatal("amendment did not add the explanation")
 	}
 	for _, path := range []string{"/accounts", "/entries", "/statements", "/drafts", "/months/2026-11/summary", "/legacy-month-summaries", "/imports"} {
 		if resp := request("GET", "/api/v1"+path, uiToken, "", ""); resp.StatusCode != 404 {

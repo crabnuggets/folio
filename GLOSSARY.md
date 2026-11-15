@@ -41,6 +41,7 @@ An optional amount suggested for a recurring item. It contributes to a monthly s
 | Allocation | Completed transfer of funds from spendable cash to savings or investments; reduces monthly surplus but is not consumption. |
 | Internal transfer | Movement between owned accounts; no income or spending. A transfer may have an allocation purpose. |
 | Draft | Proposed record requiring validation and, initially, user confirmation before it affects totals. |
+| Amendment | Draft that changes the amount or explanations of an item that already has a monthly amount. Refused on acceptance if that amount or those explanations changed after it was proposed. |
 | Posting | Confirmed financial record that participates in deterministic summaries. |
 | Recurrence | Template generating expected items, never evidence that income arrived or a bill was paid. |
 | Evidence | Source metadata supporting a draft, such as an email message ID or a statement page reference. |

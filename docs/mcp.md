@@ -1,12 +1,15 @@
 # Folio MCP
 
-Folio exposes three tools over the official Go MCP SDK's stateless Streamable HTTP
+Folio exposes four tools over the official Go MCP SDK's stateless Streamable HTTP
 transport at `https://folio-j4md.onrender.com/mcp`:
 
-- `read_monthly_sheet` reads a month, section IDs, current version, and totals.
-- `create_monthly_item_draft` persists one pending proposal, optionally with a
-  breakdown (explanations) for a money-out item.
+- `read_monthly_sheet` reads a month's items (with IDs, amounts and explanations),
+  section IDs, current version, and totals.
 - `list_pending_monthly_drafts` reads pending proposals for one month.
+- `create_monthly_item_draft` persists one pending proposal for a blank or new
+  item, optionally with a breakdown (explanations) for a money-out item.
+- `propose_monthly_item_amendment` persists one pending proposal to change an item
+  that already has an amount: a corrected amount, or explanations that add detail.
 
 The intended client is Claude (claude.ai, desktop or mobile) with Folio added as a
 custom connector. You upload a statement, screenshot, or describe amounts in chat;
@@ -17,12 +20,23 @@ Every MCP request, including initialization and tool discovery, requires an owne
 access token. MCP cannot accept, reject, edit, or post amounts. The signed-in Folio
 UI shows Pending proposals with review, edit, accept, reject, and refresh actions.
 Accepting a proposal fills a matching blank item or adds a monthly item, and copies
-its breakdown to the item's explanations. It refuses to overwrite an entered amount.
-Recurrence preferences stay intact. Pending and rejected proposals never contribute
+its breakdown to the item's explanations. It refuses to overwrite an entered amount;
+only an amendment, accepted explicitly, changes one. Recurrence preferences stay intact. Pending and rejected proposals never contribute
 to totals.
 
+An amendment records the item's entered amount and explanations when it is
+proposed. Accepting it replaces both and keeps the item's name, section, note and
+recurrence. Acceptance is refused with `ITEM_CHANGED` if either has changed since.
+
 Source namespace plus external identity deduplicates proposals across reconnects,
-retries, edits, and review decisions. Changed source content returns a conflict.
+retries, edits, and review decisions. The match compares what a proposal would
+change (month, item, amount and explanations), not the assistant's note or evidence
+wording, so reading the same document again finds the earlier proposal. The tools
+then return `outcome: already_proposed` with that proposal and its state (pending,
+accepted or rejected). The same identity with a different item, amount or
+explanations fails, and the error names the existing proposal so the assistant
+can report it. Proposals staged before this matching existed conflict on any
+re-proposal under their identity, with the same informative error.
 Creation checks the sheet version; editing and rejection check the proposal
 version. Acceptance checks both versions inside the owner transaction. State,
 audit, and HTTP retry responses commit together. Replaying an acceptance cannot
@@ -32,8 +46,7 @@ included, while leaving the source marked as reviewed.
 ## Hosted authorization setup
 
 Claude authorizes against Folio through Supabase's OAuth 2.1 server, using your
-existing Folio sign-in. It is separate from the in-app "Continue with ChatGPT"
-connection, which is unchanged.
+existing Folio sign-in.
 
 These are external account changes. They have not been applied by this
 implementation. The project's OAuth discovery returned 404 during investigation
@@ -106,11 +119,19 @@ verified after setup.
 
    ```text
    Folio tracks one amount per item per month, not individual transactions.
-   Always read the month in Folio first and reuse existing item names and sections.
+   Before proposing anything from a document, read the month in Folio and list its
+   pending proposals. If an entered item or a pending proposal already covers the
+   document, tell me what is there and ask before proposing again.
+   Reuse existing item names and sections.
    For a credit card statement, propose one draft for the statement total in that
    card's bill item and list the charges as explanations. Explanations must not
    add up to more than the total.
-   Use the statement's file name and date as source_id and external_id.
+   If the item already has an amount, propose an amendment instead: a corrected
+   amount, or the charges as explanations.
+   Build source_id from the issuer and document type, and external_id from details
+   printed in the document, such as the card's last 4 digits and the statement
+   date. Never use the file name.
+   If Folio says a proposal already exists, tell me instead of creating another.
    Only create drafts. Never say anything has been saved or paid.
    ```
 
@@ -128,6 +149,14 @@ once the app has woken.
 ChatGPT can use the same endpoint by registering its own client and callback, but
 write tools in custom connectors are limited to Business, Enterprise and Edu plans,
 so it cannot create drafts on Plus or Pro.
+
+## In-app composer removal
+
+The in-app ChatGPT composer, its connection and capture routes, and the
+`CHATGPT_*` settings are removed; see [ADR 0008](adr/0008-claude-only-assistant-and-amendments.md).
+Remove `CHATGPT_REDIRECT_URI` and `CHATGPT_ENCRYPTION_KEY` from any environment
+that sets them. A saved ChatGPT connection stays in the owner document as an
+opaque retired field and is never read.
 
 ## Legacy removal and storage compatibility
 

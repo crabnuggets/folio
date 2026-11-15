@@ -11,7 +11,7 @@ beforeEach(() => {
 afterEach(cleanup);
 const section = '00000000-0000-4000-8000-000000000004';
 const sheet: S['MonthlySheet'] = { month: '2026-11', version: 1, currency: 'SGD', currency_exponent: 2, currency_locked: false, undo_token: null, money_in_minor: '0', money_out_minor: '0', remainder_minor: '0', missing_count: 0, sections: [{ id: section, name: 'Credit cards', direction: 'out', amount_label: 'Bill amount', total_minor: '0', missing_count: 0, items: [] }] };
-const draft: S['MonthlyDraft'] = { id: '11111111-1111-4111-8111-111111111111', version: 1, created_at: '2026-11-01T00:00:00Z', updated_at: '2026-11-01T00:00:00Z', month: sheet.month, section_id: section, name: 'Sample card', amount_minor: '1250', note: 'Proposed bill', evidence: 'Synthetic statement page 1', source_id: 'test:statement', external_id: 'one', sheet_version: 1, state: 'pending', accepted_item_id: null, proposal_hash: 'synthetic', explanations: [] };
+const draft: S['MonthlyDraft'] = { id: '11111111-1111-4111-8111-111111111111', version: 1, created_at: '2026-11-01T00:00:00Z', updated_at: '2026-11-01T00:00:00Z', month: sheet.month, section_id: section, name: 'Sample card', amount_minor: '1250', note: 'Proposed bill', evidence: 'Synthetic statement page 1', source_id: 'test:statement', external_id: 'one', sheet_version: 1, amendment: null, state: 'pending', accepted_item_id: null, proposal_hash: 'synthetic', explanations: [] };
 
 function mount(transport: typeof fetch) {
   const api = new ApiClient(transport); api.setToken('synthetic-owner');
@@ -86,4 +86,29 @@ it('shows a proposal breakdown and can drop it when saving edits', async () => {
   fireEvent.click(screen.getByRole('button', { name: 'Save proposal edits' }));
   await waitFor(() => expect(writes).toHaveLength(1));
   expect(JSON.parse(String(writes[0].body))).toMatchObject({ amount_minor: '500', explanations: [] });
+});
+
+it('shows an amendment against the entered amount and keeps its item fixed when editing', async () => {
+  let current: S['MonthlyDraft'] = { ...draft, explanations: [{ name: 'Grocer', amount_minor: '1000' }, { name: 'Cafe', amount_minor: '250' }], amendment: { item_id: '22222222-2222-4222-8222-222222222222', base_amount_minor: '1250', base_explanations: [{ name: 'Grocer', amount_minor: '1000' }] } };
+  const writes: RequestInit[] = [];
+  const accept = mount(async (_input, init) => {
+    if (init?.method === 'PUT') {
+      writes.push(init); current = { ...current, ...JSON.parse(String(init.body)), version: 2 };
+      return new Response(JSON.stringify(current));
+    }
+    return new Response(JSON.stringify({ items: [current], next_cursor: null }));
+  });
+  expect(await screen.findByText(/Changes the breakdown of the entered amount/)).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Review Sample card' }));
+  expect(screen.getByRole('dialog').textContent).toContain('Review amendment');
+  expect(screen.getByLabelText('Entered breakdown for Sample card').textContent).toContain('Unexplained');
+  expect(screen.getByLabelText('Breakdown for Sample card').textContent).toContain('Cafe');
+  expect(screen.queryByLabelText('Item name')).toBeNull();
+  fireEvent.change(screen.getByLabelText('Note'), { target: { value: 'Owner checked' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Save proposal edits' }));
+  await waitFor(() => expect(writes).toHaveLength(1));
+  expect(JSON.parse(String(writes[0].body))).toMatchObject({ name: 'Sample card', section_id: section, amount_minor: '1250', note: 'Owner checked' });
+  fireEvent.click(await screen.findByRole('button', { name: 'Review Sample card' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Accept amendment' }));
+  await waitFor(() => expect(accept).toHaveBeenCalledOnce());
 });

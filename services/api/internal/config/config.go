@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/crabnuggets/folio/services/api/internal/auth"
-	"github.com/crabnuggets/folio/services/api/internal/chatgpt"
 	"github.com/crabnuggets/folio/services/api/internal/domain"
 )
 
@@ -18,7 +17,6 @@ type Config struct {
 	OwnerID     string
 	WebDistDir  string
 	Auth        auth.Config
-	ChatGPT     chatgpt.Config
 	BrowserAuth auth.BrowserConfig
 	MCPOrigin   string
 	MCPClientID string
@@ -74,10 +72,6 @@ func FromEnv(get func(string) string) (Config, error) {
 	if strings.ContainsRune(webDistDir, '\x00') {
 		return Config{}, errors.New("WEB_DIST_DIR must be a valid filesystem path")
 	}
-	connection := chatgpt.Config{RedirectURI: get("CHATGPT_REDIRECT_URI"), EncryptionKey: get("CHATGPT_ENCRYPTION_KEY")}
-	if err := chatgpt.Validate(connection); err != nil {
-		return Config{}, err
-	}
 	browser := auth.BrowserConfig{DevelopmentKey: env == "development" && mode == "dev"}
 	if key := get("SUPABASE_PUBLISHABLE_KEY"); key != "" {
 		if mode != "jwt" || !strings.HasPrefix(key, "sb_publishable_") || strings.ContainsAny(key, " \t\r\n") {
@@ -104,5 +98,5 @@ func FromEnv(get func(string) string) (Config, error) {
 		}
 		browser.MCPClientID = mcpClient
 	}
-	return Config{Address: ":" + port, DatabaseURL: databaseURL, OwnerID: owner, WebDistDir: webDistDir, Auth: a, ChatGPT: connection, BrowserAuth: browser, MCPOrigin: mcpOrigin, MCPClientID: mcpClient}, nil
+	return Config{Address: ":" + port, DatabaseURL: databaseURL, OwnerID: owner, WebDistDir: webDistDir, Auth: a, BrowserAuth: browser, MCPOrigin: mcpOrigin, MCPClientID: mcpClient}, nil
 }

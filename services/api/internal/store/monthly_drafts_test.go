@@ -19,7 +19,7 @@ func checkMonthlyDraftStore(t *testing.T, db Store) (string, string, string, Res
 	for range 12 {
 		wg.Go(func() {
 			_, _, err := db.Execute(ctx, owner, domain.NewID(), "stage", func(st *domain.State) (Result, error) {
-				d, err := st.CreateMonthlyDraft(input)
+				d, _, err := st.CreateMonthlyDraft(input)
 				if err != nil {
 					return Result{}, err
 				}
@@ -178,7 +178,7 @@ func TestPostgresRetiredAggregateFieldsSurviveMonthlyWrite(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, _, err = db.Execute(ctx, owner, domain.NewID(), "new-proposal", func(st *domain.State) (Result, error) {
-		d, err := st.CreateMonthlyDraft(domain.MonthlyDraftInput{Month: "2026-11", SectionID: "00000000-0000-4000-8000-000000000004", Name: "New card", AmountMinor: 100, SourceID: "test", ExternalID: "one", SheetVersion: st.MonthlySheet.Version})
+		d, _, err := st.CreateMonthlyDraft(domain.MonthlyDraftInput{Month: "2026-11", SectionID: "00000000-0000-4000-8000-000000000004", Name: "New card", AmountMinor: 100, SourceID: "test", ExternalID: "one", SheetVersion: st.MonthlySheet.Version})
 		if err != nil {
 			return Result{}, err
 		}
