@@ -109,7 +109,7 @@ test('SGD is fixed before amounts and in empty later months with separate month 
   await signIn(page);
   const change = page.getByRole('button', { name: 'Change currency', exact: true }); await expect(change).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Settings', exact: true })).toHaveCount(0);
-  await expect(page.getByRole('region', { name: 'Monthly summary' })).toContainText('SGD —');
+  await expect(page.getByRole('region', { name: 'Monthly summary' })).toContainText('No amounts yet');
   const monthSelect = page.getByRole('button', { name: /^Month:/ });
   await expect(monthSelect).toHaveText('October 2026'); await monthSelect.click(); await expect(page.getByRole('group', { name: 'Choose month' }).getByRole('button')).toHaveCount(12); await monthSelect.press('Escape');
   await page.getByRole('button', { name: 'Next month', exact: true }).click(); await expect(monthSelect).toHaveText('November 2026'); await expect(monthSelect).toBeEnabled();

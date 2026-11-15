@@ -35,13 +35,13 @@ it('shows evidence and requires saved edits before explicit acceptance', async (
   fireEvent.click(screen.getByRole('button', { name: 'Review Sample card' }));
   expect(screen.getByText(draft.evidence)).toBeTruthy();
   fireEvent.change(screen.getByLabelText('Proposed amount (SGD)'), { target: { value: '20.00' } });
-  expect(screen.getByRole('button', { name: 'Accept proposed amount' })).toHaveProperty('disabled', true);
+  expect(screen.queryByRole('button', { name: 'Accept proposal' })).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Save proposal edits' }));
-  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Accept proposal' })).toHaveProperty('disabled', false));
+  expect(screen.getByRole('dialog')).toBeTruthy();
   expect(JSON.parse(String(writes[0].body)).amount_minor).toBe('2000');
   expect(writes[0].headers).toMatchObject({ 'If-Match': '"1"' });
-  fireEvent.click(await screen.findByRole('button', { name: 'Review Sample card' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Accept proposed amount' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Accept proposal' }));
   await waitFor(() => expect(accept).toHaveBeenCalledOnce());
   expect(accept.mock.calls[0][0]).toMatchObject({ amount_minor: '2000', version: 2 });
 });
@@ -58,7 +58,7 @@ it('retries a lost rejection response with the identical command and keeps accep
   });
   fireEvent.click(await screen.findByRole('button', { name: 'Review Sample card' }));
   fireEvent.click(screen.getByRole('button', { name: 'Reject proposal' }));
-  fireEvent.click(await screen.findByRole('button', { name: 'Retry same review action' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Try again' }));
   await screen.findByText('No pending proposals for this month.');
   expect(attempts).toHaveLength(2);
   expect(attempts[1].headers).toEqual(attempts[0].headers);
@@ -76,13 +76,13 @@ it('shows a proposal breakdown and can drop it when saving edits', async () => {
     }
     return new Response(JSON.stringify({ items: [current], next_cursor: null }));
   });
-  expect(await screen.findByText(/2 explained parts/)).toBeTruthy();
+  expect(await screen.findByText(/2 explanations/)).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'Review Sample card' }));
-  const breakdown = screen.getByLabelText('Breakdown for Sample card');
+  const breakdown = screen.getByLabelText('Explanations for Sample card');
   expect(breakdown.textContent).toContain('Grocer');
   expect(breakdown.textContent).toContain('Unexplained');
   fireEvent.change(screen.getByLabelText('Proposed amount (SGD)'), { target: { value: '5.00' } });
-  fireEvent.click(screen.getByLabelText('Keep breakdown'));
+  fireEvent.click(screen.getByLabelText('Keep explanations'));
   fireEvent.click(screen.getByRole('button', { name: 'Save proposal edits' }));
   await waitFor(() => expect(writes).toHaveLength(1));
   expect(JSON.parse(String(writes[0].body))).toMatchObject({ amount_minor: '500', explanations: [] });
@@ -98,17 +98,17 @@ it('shows an amendment against the entered amount and keeps its item fixed when 
     }
     return new Response(JSON.stringify({ items: [current], next_cursor: null }));
   });
-  expect(await screen.findByText(/Changes the breakdown of the entered amount/)).toBeTruthy();
+  expect(await screen.findByText(/Changes the explanations of the entered amount/)).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'Review Sample card' }));
-  expect(screen.getByRole('dialog').textContent).toContain('Review amendment');
-  expect(screen.getByLabelText('Entered breakdown for Sample card').textContent).toContain('Unexplained');
-  expect(screen.getByLabelText('Breakdown for Sample card').textContent).toContain('Cafe');
+  expect(screen.getByRole('dialog').textContent).toContain('Amendment for Sample card');
+  expect(screen.getByLabelText('Entered explanations for Sample card').textContent).toContain('Unexplained');
+  expect(screen.getByLabelText('Explanations for Sample card').textContent).toContain('Cafe');
   expect(screen.queryByLabelText('Item name')).toBeNull();
   fireEvent.change(screen.getByLabelText('Note'), { target: { value: 'Owner checked' } });
   fireEvent.click(screen.getByRole('button', { name: 'Save proposal edits' }));
   await waitFor(() => expect(writes).toHaveLength(1));
   expect(JSON.parse(String(writes[0].body))).toMatchObject({ name: 'Sample card', section_id: section, amount_minor: '1250', note: 'Owner checked' });
-  fireEvent.click(await screen.findByRole('button', { name: 'Review Sample card' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Accept amendment' }));
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Accept proposal' })).toHaveProperty('disabled', false));
+  fireEvent.click(screen.getByRole('button', { name: 'Accept proposal' }));
   await waitFor(() => expect(accept).toHaveBeenCalledOnce());
 });
