@@ -61,7 +61,12 @@ verified after setup.
    ```
 
    Anthropic documents the first and says it may move to the second, so register
-   both. Keep the client ID and secret for steps 4, 5 and 7.
+   both. Set the token endpoint authentication method to `client_secret_post`,
+   because Claude sends the secret in the request body; Supabase rejects it under
+   the default `client_secret_basic`. Keep the client ID and secret for steps 4, 5
+   and 7. Also set Authentication > URL Configuration > Site URL to exactly
+   `https://folio-j4md.onrender.com`. The consent page fails with "unauthorized
+   request origin" if the scheme or host differs.
 4. **Install the audience hook.** Supabase's default access-token audience
    (`authenticated`) is shared with the web app. Folio requires MCP tokens to carry
    the dedicated audience `https://folio-j4md.onrender.com/mcp` and refuses them on
@@ -92,9 +97,10 @@ verified after setup.
    custom connector. Name it `Folio`, enter `https://folio-j4md.onrender.com/mcp`,
    open Advanced settings, and paste the client ID and secret from step 3. Select
    Connect, sign in to Folio, then choose "Allow monthly sheets and proposals" on
-   the consent page. If the token exchange fails with `invalid_client`, check for
-   stray spaces in the pasted values, then confirm the client's token endpoint
-   authentication method in Supabase accepts a client secret.
+   the consent page. If Claude reports that authorization failed, check the
+   Supabase auth logs for `/oauth/token`: an "invalid authentication method" error
+   means the client is not `client_secret_post`, and `invalid_client` usually means
+   stray spaces in the pasted values.
 8. **Create a Claude Project** named Folio with Folio enabled and instructions
    such as:
 

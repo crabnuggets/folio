@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"sort"
@@ -17,6 +18,30 @@ import (
 	"github.com/crabnuggets/folio/services/api/internal/store"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
+
+// refusalRecorder keeps the status and the start of an error body for logging.
+type refusalRecorder struct {
+	http.ResponseWriter
+	status int
+	body   []byte
+}
+
+func (r *refusalRecorder) WriteHeader(status int) {
+	r.status = status
+	r.ResponseWriter.WriteHeader(status)
+}
+
+func (r *refusalRecorder) Write(b []byte) (int, error) {
+	if r.status == 0 {
+		r.status = http.StatusOK
+	}
+	if r.status >= 400 && len(r.body) < 300 {
+		r.body = append(r.body, b[:min(len(b), 300-len(r.body))]...)
+	}
+	return r.ResponseWriter.Write(b)
+}
+
+func (r *refusalRecorder) Unwrap() http.ResponseWriter { return r.ResponseWriter }
 
 func sortedDraftIDs(drafts map[string]domain.MonthlyDraft) []string {
 	ids := make([]string, 0, len(drafts))
@@ -144,16 +169,25 @@ func WithMCP(next http.Handler, db store.Store, owner, origin, clientID string, 
 	}
 	mux.HandleFunc("GET /.well-known/oauth-protected-resource/mcp", metadata)
 	mux.HandleFunc("GET /.well-known/oauth-protected-resource", metadata)
+	// Claude connectors may send their own site as Origin; any other browser origin
+	// is refused to prevent DNS rebinding. Native clients send no Origin.
+	allowedOrigins := map[string]bool{origin: true, "https://claude.ai": true, "https://claude.com": true}
 	mux.Handle("/mcp", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Request-ID", domain.NewID())
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
-		if requestOrigin := r.Header.Get("Origin"); requestOrigin != "" && requestOrigin != origin {
+		if requestOrigin := r.Header.Get("Origin"); requestOrigin != "" && !allowedOrigins[requestOrigin] {
+			slog.Warn("MCP request refused", "reason", "origin", "origin", requestOrigin)
 			writeError(w, r, domain.Fail(403, "FORBIDDEN", "Origin is not allowed"))
 			return
 		}
 		w.Header().Set("WWW-Authenticate", `Bearer resource_metadata="`+metadataURL+`", scope="openid"`)
-		protected.ServeHTTP(w, r)
+		rec := &refusalRecorder{ResponseWriter: w}
+		protected.ServeHTTP(rec, r)
+		// Unauthenticated probes are expected during discovery; log only refusals of a presented token or later protocol errors.
+		if rec.status >= 400 && (rec.status != 401 || r.Header.Get("Authorization") != "") {
+			slog.Warn("MCP request refused", "method", r.Method, "status", rec.status, "body", string(rec.body), "user_agent", r.UserAgent())
+		}
 	}))
 	mux.Handle("/", next)
 	return mux, nil
