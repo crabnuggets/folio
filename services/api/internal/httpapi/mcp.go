@@ -160,7 +160,10 @@ func WithMCP(next http.Handler, db store.Store, owner, origin, clientID string, 
 		}
 		return nil, d, nil
 	})
-	transport := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return protocol }, &mcp.StreamableHTTPOptions{Stateless: true, JSONResponse: true, MaxRequestBodyBytes: MaxBodyBytes})
+	// Hosting proxies such as Render reach the app over loopback, which the SDK's
+	// localhost guard mistakes for a local-only server and refuses with 403. This is a
+	// public, token-protected endpoint; the Origin check above covers DNS rebinding.
+	transport := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return protocol }, &mcp.StreamableHTTPOptions{Stateless: true, JSONResponse: true, MaxRequestBodyBytes: MaxBodyBytes, DisableLocalhostProtection: true})
 	protected := middleware(transport)
 	metadataURL := origin + "/.well-known/oauth-protected-resource/mcp"
 	mux := http.NewServeMux()
