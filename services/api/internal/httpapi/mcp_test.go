@@ -117,6 +117,8 @@ func TestMCPAuthenticatedStreamableToolsAndUIAcceptance(t *testing.T) {
 		r.Header.Set("Accept", "application/json, text/event-stream")
 		r.Header.Set("Authorization", "Bearer "+valid)
 		r.Header.Set("Origin", tc.origin)
+		// The test server listens on loopback, like the app behind Render's proxy.
+		r.Host = "folio.example"
 		resp, err := host.Client().Do(r)
 		if err != nil {
 			t.Fatal(err)
