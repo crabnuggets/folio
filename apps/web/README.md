@@ -44,9 +44,10 @@ holds Manage sections, Export JSON and Sign out. Old financial data stays separa
 and remains in the lossless export. The monthly remainder is entered money in minus
 entered money out, not a bank balance or a measure of consumption.
 
-Chat stays docked at the bottom of the sheet. Focus it to connect ChatGPT or review
-what it found. Suggestions never reach the sheet until you add them, one at a time
-or all together.
+Proposals from Claude, connected over [MCP](../../docs/mcp.md), wait under Pending
+proposals. Each one fills or adds an item, or amends an item that already has an
+amount, and changes nothing until you accept it. An amendment shows the entered
+amount and breakdown from when it was proposed beside the proposed ones.
 
 ## Saving and recovery
 

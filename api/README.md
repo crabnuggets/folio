@@ -26,9 +26,11 @@ Export schema 2 contains monthly sheets, proposal history, settings, and audit.
 Removed accounting endpoints and their contracts no longer exist. Stored retired
 fields remain opaque in owner documents and are not converted or deleted.
 
-The current in-app chat capture routes remain independent of MCP. They retain
-the existing local OpenAI connection behavior and propose items for explicit
-review before saving. MCP authorization does not enable hosted plan usage.
+A proposal with a non-null `amendment` changes an item that already has an
+amount. It records the entered amount and explanations it was made against;
+acceptance replaces them, keeps the item's name, section, note and recurrence, and
+returns 409 `ITEM_CHANGED` if they no longer match. The in-app chat capture
+and ChatGPT connection routes have been removed.
 
 Run `scripts/generate_openapi.py` to regenerate `openapi.yaml`, then
 `npm run generate:api` in `apps/web`. `scripts/validate_contract.py` checks

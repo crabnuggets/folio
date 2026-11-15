@@ -121,12 +121,11 @@ type Audit struct {
 	At       time.Time       `json:"at"`
 }
 type State struct {
-	ChatGPTConnection *ChatGPTConnection      `json:"chatgpt_connection,omitempty"`
-	MonthlySheet      MonthlySheetState       `json:"monthly_sheet"`
-	MonthlyDrafts     map[string]MonthlyDraft `json:"monthly_drafts"`
-	Settings          Settings                `json:"settings"`
-	AuditEvents       []Audit                 `json:"audit_events"`
-	retained          map[string]json.RawMessage
+	MonthlySheet  MonthlySheetState       `json:"monthly_sheet"`
+	MonthlyDrafts map[string]MonthlyDraft `json:"monthly_drafts"`
+	Settings      Settings                `json:"settings"`
+	AuditEvents   []Audit                 `json:"audit_events"`
+	retained      map[string]json.RawMessage
 }
 
 // Unknown aggregate fields survive writes without loading retired financial types.
@@ -141,7 +140,7 @@ func (s *State) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, &fields); err != nil {
 		return err
 	}
-	for _, key := range []string{"chatgpt_connection", "monthly_sheet", "monthly_drafts", "settings", "audit_events"} {
+	for _, key := range []string{"monthly_sheet", "monthly_drafts", "settings", "audit_events"} {
 		delete(fields, key)
 	}
 	*s = State(v)
@@ -167,14 +166,6 @@ func (s State) MarshalJSON() ([]byte, error) {
 }
 func NewState() *State {
 	return &State{MonthlySheet: newMonthlySheetState(), MonthlyDrafts: map[string]MonthlyDraft{}, Settings: Settings{1, "SGD", 2, "Asia/Singapore"}, AuditEvents: []Audit{}}
-}
-
-// ChatGPTConnection keeps the installation identity and encrypted OAuth credentials.
-// API exports omit this private provider state.
-type ChatGPTConnection struct {
-	HostID      string `json:"host_id"`
-	ClientID    string `json:"client_id"`
-	Credentials string `json:"credentials"`
 }
 
 // Audit appends an event with a new identity and the current UTC timestamp.

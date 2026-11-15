@@ -35,25 +35,36 @@ export function MonthlyDraftReview({ api, sheet, signedIn, disabled, onDirty, on
     {drafts.error && <p role="alert">Could not load proposals. {errorMessage(drafts.error)}</p>}
     {drafts.data?.length === 0 && <p className="fine-print">No pending proposals for this month.</p>}
     <ul className="draft-list">{drafts.data?.map(draft => <li key={draft.id}>
-      <div><strong>{draft.name}</strong> <span>{formatMoney(draft.amount_minor, sheet.currency, sheet.currency_exponent)}</span><p>{sheet.sections.find(section => section.id === draft.section_id)?.name}{draft.explanations.length > 0 && ` · ${draft.explanations.length} explained ${draft.explanations.length === 1 ? 'part' : 'parts'}`}</p></div>
+      <div><strong>{draft.name}</strong> <span>{formatMoney(draft.amount_minor, sheet.currency, sheet.currency_exponent)}</span><p>{sheet.sections.find(section => section.id === draft.section_id)?.name}{draft.amendment && ` · ${draft.amendment.base_amount_minor === draft.amount_minor ? 'Changes the breakdown of the entered amount' : `Replaces entered ${formatMoney(draft.amendment.base_amount_minor, sheet.currency, sheet.currency_exponent)}`}`}{draft.explanations.length > 0 && ` · ${draft.explanations.length} explained ${draft.explanations.length === 1 ? 'part' : 'parts'}`}</p></div>
       <button disabled={disabled || Boolean(selected)} onClick={() => { setSelected(draft); setEdited(false); setError(undefined); }}>Review {draft.name}</button>
       {feedback(draft.id)}
     </li>)}</ul>
-    {selected && <Dialog title="Review proposal" locked={locked} onClose={() => setSelected(undefined)}>
+    {selected && <Dialog title={selected.amendment ? 'Review amendment' : 'Review proposal'} locked={locked} onClose={() => setSelected(undefined)}>
       <p>Source: {selected.source_id} / {selected.external_id}</p>
       {selected.evidence && <blockquote className="draft-evidence">{selected.evidence}</blockquote>}
-      {selected.explanations.length > 0 && <Breakdown draft={selected} sheet={sheet} />}
-      <p>Accepting adds this amount to {sheet.month}. A matching blank item is filled without changing its recurrence. An item that already has an amount must be reviewed on the sheet.</p>
+      {selected.amendment ? <div className="draft-compare">
+        <section aria-label={`Entered ${selected.name}`}><h3>Entered when proposed</h3><p className="money">{formatMoney(selected.amendment.base_amount_minor, sheet.currency, sheet.currency_exponent)}</p>
+          {selected.amendment.base_explanations.length > 0 && <Breakdown label={`Entered breakdown for ${selected.name}`} amount={selected.amendment.base_amount_minor} parts={selected.amendment.base_explanations} sheet={sheet} />}</section>
+        <section aria-label={`Proposed ${selected.name}`}><h3>Proposed</h3><p className="money">{formatMoney(selected.amount_minor, sheet.currency, sheet.currency_exponent)}</p>
+          {selected.explanations.length > 0 && <Breakdown label={`Breakdown for ${selected.name}`} amount={selected.amount_minor} parts={selected.explanations} sheet={sheet} />}</section>
+      </div> : selected.explanations.length > 0 && <Breakdown label={`Breakdown for ${selected.name}`} amount={selected.amount_minor} parts={selected.explanations} sheet={sheet} />}
+      <p>{selected.amendment
+        ? `Accepting replaces this item's amount and breakdown for ${sheet.month}. Its name, section, note and recurrence stay as they are. If its amount or breakdown has changed since this proposal, acceptance is refused.`
+        : `Accepting adds this amount to ${sheet.month}. A matching blank item is filled without changing its recurrence. An item that already has an amount must be reviewed on the sheet.`}</p>
       <div onChangeCapture={() => setEdited(true)}><Form key={`${selected.id}-${selected.version}`} submit="Save proposal edits" disabled={locked} defaults={{ name: selected.name, section_id: selected.section_id, amount: moneyInput(selected.amount_minor, sheet.currency_exponent), note: selected.note, keep_breakdown: true }} fields={[
-        { name: 'name', label: 'Item name', required: true },
-        { name: 'section_id', label: 'Section', type: 'select', required: true, options: sheet.sections.map(section => ({ value: section.id, label: `${section.name} (money ${section.direction})` })) },
+        ...(selected.amendment ? [] : [
+          { name: 'name', label: 'Item name', required: true },
+          { name: 'section_id', label: 'Section', type: 'select' as const, required: true, options: sheet.sections.map(section => ({ value: section.id, label: `${section.name} (money ${section.direction})` })) },
+        ]),
         { name: 'amount', label: 'Proposed amount (SGD)', type: 'money', required: true },
         { name: 'note', label: 'Note', type: 'textarea' },
         ...(selected.explanations.length ? [{ name: 'keep_breakdown', label: 'Keep breakdown', type: 'checkbox' as const, hint: 'Clear this to drop the breakdown, for example after lowering the amount below it.' }] : []),
       ]} onSubmit={async values => {
         const amount = parseMoney(text(values, 'amount'), sheet.currency_exponent);
         if (BigInt(amount) < 0n) throw new Error('Enter zero or a positive amount.');
-        command.current = api.command<'MonthlyDraft'>(`/monthly-drafts/${selected.id}`, { name: text(values, 'name'), section_id: text(values, 'section_id'), amount_minor: amount, note: text(values, 'note'), ...(values.keep_breakdown === false ? { explanations: [] } : {}) }, { method: 'PUT', version: selected.version });
+        // An amendment stays on its item; only the amount, note and breakdown can change.
+        const item = selected.amendment ? { name: selected.name, section_id: selected.section_id } : { name: text(values, 'name'), section_id: text(values, 'section_id') };
+        command.current = api.command<'MonthlyDraft'>(`/monthly-drafts/${selected.id}`, { ...item, amount_minor: amount, note: text(values, 'note'), ...(values.keep_breakdown === false ? { explanations: [] } : {}) }, { method: 'PUT', version: selected.version });
         await run();
       }} /></div>
       {error != null && <div role="alert"><p>{errorMessage(error)}</p>{command.current && <button disabled={busy} onClick={() => void run()}>Retry same review action</button>}{error instanceof ApiError && error.status === 412 && <button onClick={() => { setSelected(undefined); void reload(); }}>Reload proposals</button>}</div>}
@@ -65,18 +76,18 @@ export function MonthlyDraftReview({ api, sheet, signedIn, disabled, onDirty, on
           const draft = selected;
           setSelected(undefined);
           void onAccept(draft, () => void reload());
-        }}>Accept proposed amount</button>
+        }}>{selected.amendment ? 'Accept amendment' : 'Accept proposed amount'}</button>
       </div>
       <p className="fine-print">Save any edits before accepting. Use Undo on the sheet to reverse an accepted amount. The source stays marked as reviewed.</p>
     </Dialog>}
   </section>;
 }
 
-function Breakdown({ draft, sheet }: { draft: Draft; sheet: S['MonthlySheet'] }) {
-  const explained = draft.explanations.reduce((sum, part) => sum + BigInt(part.amount_minor), 0n);
-  const remainder = BigInt(draft.amount_minor) - explained;
-  return <dl className="explanation-list" aria-label={`Breakdown for ${draft.name}`}>
-    {draft.explanations.map((part, index) => <div key={index}><dt>{part.name}</dt><dd>{formatMoney(part.amount_minor, sheet.currency, sheet.currency_exponent)}</dd></div>)}
+function Breakdown({ label, amount, parts, sheet }: { label: string; amount: string; parts: S['MonthlyExplanation'][]; sheet: S['MonthlySheet'] }) {
+  const explained = parts.reduce((sum, part) => sum + BigInt(part.amount_minor), 0n);
+  const remainder = BigInt(amount) - explained;
+  return <dl className="explanation-list" aria-label={label}>
+    {parts.map((part, index) => <div key={index}><dt>{part.name}</dt><dd>{formatMoney(part.amount_minor, sheet.currency, sheet.currency_exponent)}</dd></div>)}
     {remainder > 0n && <div className="unexplained"><dt>Unexplained</dt><dd>{formatMoney(remainder.toString(), sheet.currency, sheet.currency_exponent)}</dd></div>}
   </dl>;
 }

@@ -17,7 +17,6 @@ import (
 	"time"
 
 	"github.com/crabnuggets/folio/services/api/internal/auth"
-	"github.com/crabnuggets/folio/services/api/internal/chatgpt"
 	"github.com/crabnuggets/folio/services/api/internal/domain"
 	"github.com/crabnuggets/folio/services/api/internal/store"
 )
@@ -25,9 +24,8 @@ import (
 const MaxBodyBytes int64 = 1 << 20
 
 type server struct {
-	store   store.Store
-	owner   string
-	chatgpt *chatgpt.Client
+	store store.Store
+	owner string
 }
 type errorEnvelope struct {
 	Error struct {
@@ -49,9 +47,9 @@ func New(db store.Store, ownerID string, middleware func(http.Handler) http.Hand
 // webDistDir. An empty path preserves API-only behavior. A configured directory
 // must exist and contain a regular index.html; static files are opened beneath
 // that directory and never replace API or health responses.
-func NewWithWebDistDir(db store.Store, ownerID string, middleware func(http.Handler) http.Handler, webDistDir string, browser auth.BrowserConfig, connections ...*chatgpt.Client) (http.Handler, error) {
+func NewWithWebDistDir(db store.Store, ownerID string, middleware func(http.Handler) http.Handler, webDistDir string, browser auth.BrowserConfig) (http.Handler, error) {
 	if strings.TrimSpace(webDistDir) == "" {
-		return newServer(db, ownerID, middleware, "", browser, connections...), nil
+		return newServer(db, ownerID, middleware, "", browser), nil
 	}
 	root, err := os.OpenRoot(webDistDir)
 	if err != nil {
@@ -74,19 +72,15 @@ func NewWithWebDistDir(db store.Store, ownerID string, middleware func(http.Hand
 	if err != nil || !indexInfo.Mode().IsRegular() {
 		return nil, errors.New("WEB_DIST_DIR index.html must be a regular file")
 	}
-	return newServer(db, ownerID, middleware, webDistDir, browser, connections...), nil
+	return newServer(db, ownerID, middleware, webDistDir, browser), nil
 }
 
-func newServer(db store.Store, ownerID string, middleware func(http.Handler) http.Handler, webDistDir string, browser auth.BrowserConfig, connections ...*chatgpt.Client) http.Handler {
+func newServer(db store.Store, ownerID string, middleware func(http.Handler) http.Handler, webDistDir string, browser auth.BrowserConfig) http.Handler {
 	s := &server{store: db, owner: ownerID}
-	if len(connections) > 0 {
-		s.chatgpt = connections[0]
-	}
 	api := http.NewServeMux()
 	s.routes(api)
 	api.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) { writeError(w, r, domain.NotFound()) })
 	root := http.NewServeMux()
-	root.HandleFunc("GET /auth/chatgpt/callback", s.chatGPTCallback)
 	root.HandleFunc("GET /auth/config", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, r, 200, browser, 0)
 	})
@@ -351,8 +345,6 @@ func lookup[T any](r *http.Request, values map[string]T) (T, error) {
 
 // routes registers the authenticated monthly workflow.
 func (s *server) routes(m *http.ServeMux) {
-	s.chatGPTRoutes(m)
-	s.captureRoutes(m)
 	s.monthlyRoutes(m)
 	m.HandleFunc("GET /api/v1/settings", func(w http.ResponseWriter, r *http.Request) {
 		s.read(w, r, func(st *domain.State) (any, int64, error) { return st.Settings, st.Settings.Version, nil })

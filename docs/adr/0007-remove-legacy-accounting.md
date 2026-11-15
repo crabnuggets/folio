@@ -1,6 +1,6 @@
 # ADR 0007: Remove legacy accounting and add assistant proposals over MCP
 
-Status: Accepted by the user, 2026-11-15. Supersedes ADR 0006's decision to retain legacy endpoints and the lossless combined export.
+Status: Accepted by the user, 2026-11-15. Supersedes ADR 0006's decision to retain legacy endpoints and the lossless combined export. Its retention of the in-app ChatGPT composer is superseded by ADR 0008.
 
 ## Context
 

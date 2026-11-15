@@ -4,6 +4,8 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -31,9 +33,20 @@ type MonthlyDraftEdit struct {
 type MonthlyDraft struct {
 	Meta
 	MonthlyDraftInput
-	State          string  `json:"state"`
-	AcceptedItemID *string `json:"accepted_item_id"`
-	ProposalHash   string  `json:"proposal_hash"`
+	// Amendment is set when the proposal changes an item that already has an
+	// amount. Nil means the proposal fills a blank item or adds one.
+	Amendment      *MonthlyAmendment `json:"amendment"`
+	State          string            `json:"state"`
+	AcceptedItemID *string           `json:"accepted_item_id"`
+	ProposalHash   string            `json:"proposal_hash"`
+}
+
+// MonthlyAmendment keeps the entered values a proposal was made against, so
+// acceptance is refused once the owner has changed the item.
+type MonthlyAmendment struct {
+	ItemID           string               `json:"item_id"`
+	BaseAmountMinor  Money                `json:"base_amount_minor"`
+	BaseExplanations []MonthlyExplanation `json:"base_explanations"`
 }
 type MonthlyDraftAccept struct {
 	SheetVersion int64 `json:"sheet_version"`
@@ -68,38 +81,93 @@ func (s *State) validateMonthlyDraft(month, sectionID, name, note string, amount
 	return err
 }
 
-// CreateMonthlyDraft stages a proposal without materializing rows or changing totals.
+func sameExplanations(a, b []MonthlyExplanation) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if monthlyNameKey(a[i].Name) != monthlyNameKey(b[i].Name) || a[i].AmountMinor != b[i].AmountMinor {
+			return false
+		}
+	}
+	return true
+}
+
+// proposalFingerprint covers what a proposal would change, not how the assistant
+// worded its note or evidence, so a re-read of the same document matches.
+func proposalFingerprint(in MonthlyDraftInput, itemID string) string {
+	parts := []string{in.Month, in.SectionID, monthlyNameKey(in.Name), itemID, strconv.FormatInt(int64(in.AmountMinor), 10)}
+	for _, e := range in.Explanations {
+		parts = append(parts, monthlyNameKey(e.Name), strconv.FormatInt(int64(e.AmountMinor), 10))
+	}
+	data, _ := json.Marshal(parts)
+	hash := sha256.Sum256(data)
+	return hex.EncodeToString(hash[:])
+}
+
+// CreateMonthlyDraft stages a proposal to fill a blank item or add one, without
+// materializing rows or changing totals. existing reports that the source was
+// already proposed; the stored proposal is returned unchanged.
+func (s *State) CreateMonthlyDraft(in MonthlyDraftInput) (d MonthlyDraft, existing bool, err error) {
+	return s.stageMonthlyDraft(in, "")
+}
+
+// CreateMonthlyAmendment stages a proposal to change the amount or explanations of
+// an item that already has an amount in the month. The explanations replace the
+// item's breakdown. The item's name, section, note, and recurrence are kept.
+func (s *State) CreateMonthlyAmendment(in MonthlyDraftInput, itemID string) (d MonthlyDraft, existing bool, err error) {
+	return s.stageMonthlyDraft(in, itemID)
+}
+
 // Source identity is durable even after editing, rejecting, accepting, or Undo.
-func (s *State) CreateMonthlyDraft(in MonthlyDraftInput) (MonthlyDraft, error) {
+func (s *State) stageMonthlyDraft(in MonthlyDraftInput, itemID string) (MonthlyDraft, bool, error) {
 	in.Name = monthlyName(in.Name)
 	in.SourceID, in.ExternalID = strings.TrimSpace(in.SourceID), strings.TrimSpace(in.ExternalID)
 	in.Explanations = normalizeExplanations(in.Explanations)
 	if in.SourceID == "" || len(in.SourceID) > 120 || in.ExternalID == "" || len(in.ExternalID) > 500 || len(in.Evidence) > 4000 || len(in.Explanations) > 100 {
-		return MonthlyDraft{}, Invalid("Provide bounded source identity, evidence, and at most 100 explanations")
+		return MonthlyDraft{}, false, Invalid("Provide bounded source identity, evidence, and at most 100 explanations")
 	}
-	if err := s.validateMonthlyDraft(in.Month, in.SectionID, in.Name, in.Note, in.AmountMinor, in.Explanations); err != nil {
-		return MonthlyDraft{}, err
+	if itemID != "" {
+		// The item, not the assistant's wording, determines an amendment's name and section.
+		in.SectionID, in.Name = "", ""
 	}
-	identity := in
-	identity.SheetVersion = 0
-	data, _ := json.Marshal(identity)
-	hash := sha256.Sum256(data)
-	digest := hex.EncodeToString(hash[:])
+	digest := proposalFingerprint(in, itemID)
 	for _, d := range s.MonthlyDrafts {
 		if d.SourceID == in.SourceID && d.ExternalID == in.ExternalID {
 			if d.ProposalHash != digest {
-				return MonthlyDraft{}, Fail(409, "SOURCE_CONFLICT", "This source identity already describes a different proposal")
+				return MonthlyDraft{}, false, Fail(409, "SOURCE_CONFLICT", fmt.Sprintf("This source identity already belongs to a different %s proposal (id %s): %q for %s, amount_minor %d, with %d explanations. Tell the owner instead of proposing again. Propose under a new identity only if the owner asks for a separate proposal.", d.State, d.ID, d.Name, d.Month, d.AmountMinor, len(d.Explanations)))
 			}
-			return d, nil
+			return d, true, nil
 		}
 	}
-	if err := CheckVersion(s.MonthlySheet.Version, in.SheetVersion); err != nil {
-		return MonthlyDraft{}, err
+	var amendment *MonthlyAmendment
+	if itemID != "" {
+		if !ValidMonth(in.Month) {
+			return MonthlyDraft{}, false, Invalid("Invalid monthly sheet month")
+		}
+		row, ok := s.MonthlySheet.Rows[in.Month][itemID]
+		if !ok || row.Removed {
+			return MonthlyDraft{}, false, NotFound()
+		}
+		if row.AmountMinor == nil {
+			return MonthlyDraft{}, false, Invalid("Only an item with an amount can be amended. Propose a monthly amount for the blank item instead")
+		}
+		if *row.AmountMinor == in.AmountMinor && sameExplanations(row.Explanations, in.Explanations) {
+			return MonthlyDraft{}, false, Invalid("The amendment matches the entered amount and explanations")
+		}
+		in.SectionID, in.Name = row.SectionID, s.MonthlySheet.Items[itemID].Name
+		amendment = &MonthlyAmendment{ItemID: itemID, BaseAmountMinor: *row.AmountMinor, BaseExplanations: append([]MonthlyExplanation{}, row.Explanations...)}
 	}
-	d := MonthlyDraft{Meta: NewMeta(), MonthlyDraftInput: in, State: "pending", ProposalHash: digest}
+	if err := s.validateMonthlyDraft(in.Month, in.SectionID, in.Name, in.Note, in.AmountMinor, in.Explanations); err != nil {
+		return MonthlyDraft{}, false, err
+	}
+	if err := CheckVersion(s.MonthlySheet.Version, in.SheetVersion); err != nil {
+		return MonthlyDraft{}, false, err
+	}
+	d := MonthlyDraft{Meta: NewMeta(), MonthlyDraftInput: in, Amendment: amendment, State: "pending", ProposalHash: digest}
 	s.MonthlyDrafts[d.ID] = d
 	s.AuditChange("monthly_draft.created", d.ID, "", nil, d)
-	return d, nil
+	return d, false, nil
 }
 
 func (s *State) pendingMonthlyDraft(id string, expected int64) (MonthlyDraft, error) {
@@ -121,6 +189,9 @@ func (s *State) EditMonthlyDraft(id string, in MonthlyDraftEdit, expected int64)
 		return d, err
 	}
 	in.Name = monthlyName(in.Name)
+	if d.Amendment != nil && (in.SectionID != d.SectionID || in.Name != d.Name) {
+		return d, Invalid("An amendment's item name and section cannot change")
+	}
 	explanations := d.Explanations
 	if in.Explanations != nil {
 		explanations = normalizeExplanations(in.Explanations)
@@ -175,7 +246,15 @@ func (s *State) AcceptMonthlyDraft(id string, expected, sheetVersion int64) (Mon
 	item, exists := s.findMonthlyItem(d.Name, section.Direction, "")
 	var sheet MonthlySheet
 	var err error
-	if row, active := s.MonthlySheet.Rows[d.Month][item.ID]; exists && active && !row.Removed {
+	if a := d.Amendment; a != nil {
+		row, active := s.MonthlySheet.Rows[d.Month][a.ItemID]
+		if !active || row.Removed || row.AmountMinor == nil || *row.AmountMinor != a.BaseAmountMinor || !sameExplanations(row.Explanations, a.BaseExplanations) {
+			return MonthlySheet{}, Fail(409, "ITEM_CHANGED", "This item's amount or explanations changed after the amendment was proposed. Reject it, or ask for a new proposal against the current values")
+		}
+		item = s.MonthlySheet.Items[a.ItemID]
+		p := item.preference(d.Month)
+		sheet, err = s.UpdateMonthlyItem(d.Month, item.ID, MonthlyItemUpdate{SectionID: row.SectionID, Name: item.Name, AmountMinor: &d.AmountMinor, Note: row.Note, RepeatMonthly: p.RepeatMonthly, UsualAmountMinor: p.UsualAmountMinor, Explanations: append([]MonthlyExplanation{}, d.Explanations...)}, sheetVersion)
+	} else if row, active := s.MonthlySheet.Rows[d.Month][item.ID]; exists && active && !row.Removed {
 		if row.AmountMinor != nil {
 			return MonthlySheet{}, Fail(409, "ITEM_ALREADY_ENTERED", "This item already has an amount. Review it on the monthly sheet before accepting another proposal")
 		}
@@ -187,7 +266,9 @@ func (s *State) AcceptMonthlyDraft(id string, expected, sheetVersion int64) (Mon
 	if err != nil {
 		return MonthlySheet{}, err
 	}
-	item, _ = s.findMonthlyItem(d.Name, section.Direction, "")
+	if d.Amendment == nil {
+		item, _ = s.findMonthlyItem(d.Name, section.Direction, "")
+	}
 	before := d
 	d.State = "accepted"
 	d.AcceptedItemID = &item.ID
