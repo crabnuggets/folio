@@ -63,7 +63,7 @@ it('clears private state on sign out and never persists the bearer', async () =>
   const storage = vi.spyOn(Storage.prototype, 'setItem'); vi.stubGlobal('fetch', transport()); mount(); await signIn();
   expect(screen.queryByRole('button', { name: 'Settings' })).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Menu' }));
-  const header = screen.getByRole('banner'); expect(header.contains(screen.getByRole('button', { name: 'Export JSON' }))).toBe(true); expect(header.contains(screen.getByRole('button', { name: 'Sign out' }))).toBe(true);
+  const header = screen.getByRole('banner'); expect(header.contains(screen.getByRole('button', { name: 'Export data' }))).toBe(true); expect(header.contains(screen.getByRole('button', { name: 'Sign out' }))).toBe(true);
   fireEvent.click(screen.getByRole('button', { name: 'Sign out' }));
   await screen.findByRole('button', { name: 'Sign in' }); expect(screen.queryByRole('heading', { name: 'Monthly remainder' })).toBeNull(); expect(storage).not.toHaveBeenCalled(); storage.mockRestore();
 });

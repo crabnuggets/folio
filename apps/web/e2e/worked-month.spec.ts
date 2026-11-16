@@ -21,7 +21,7 @@ test('one monthly sheet accounts for a complete synthetic month and exports serv
   await expect(page.getByRole('button', { name: 'Settings', exact: true })).toHaveCount(0);
   await openMenu(page);
   const downloadPromise = page.waitForEvent('download');
-  await page.getByRole('banner').getByRole('button', { name: 'Export JSON', exact: true }).click();
+  await page.getByRole('banner').getByRole('button', { name: 'Export data', exact: true }).click();
   const download = await downloadPromise; expect(download.suggestedFilename()).toMatch(/^folio-export-.*\.json$/);
   const exported = await backend.get<'Export'>('/exports'); expect(exported.schema_version).toBe(2);
   expect(Object.keys(exported.state.monthly_sheet.rows[month])).toHaveLength(8);
@@ -36,7 +36,7 @@ test('recurring names start blank, usual amounts respect edits and zero, skip di
   const zero = page.getByLabel('Amount for Zero allowance', { exact: true });
   const card = page.getByLabel('Bill amount for Everyday card', { exact: true });
   await expect(savings).toHaveValue(''); await expect(card).toHaveValue('');
-  await expect(page.getByRole('region', { name: 'Monthly summary' })).toContainText('Totals leave out 3 blank items');
+  await expect(page.getByRole('region', { name: 'Monthly summary' })).toContainText('3 items still blank');
   await zero.fill('0'); await zero.press('Enter');
   await expect(page.getByRole('button', { name: /^Month:/ })).toBeEnabled();
   await page.getByRole('button', { name: 'Use usual amounts', exact: true }).click();
