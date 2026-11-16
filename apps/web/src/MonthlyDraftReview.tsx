@@ -50,13 +50,14 @@ export function MonthlyDraftReview({ api, sheet, signedIn, disabled, onDirty, on
     const month = formatMonth(sheet.month);
     if (!draft.amendment) {
       // Mirrors acceptance: a same-direction item with the same name is filled if blank and refused if entered.
+      // Acceptance also matches former names, which the sheet does not expose, so a miss cannot promise a new item.
       const direction = sheet.sections.find(section => section.id === draft.section_id)?.direction;
       const key = (name: string) => name.trim().replace(/\s+/g, ' ').toLowerCase();
       const match = sheet.sections.filter(section => section.direction === direction).flatMap(section => section.items).find(item => key(item.name) === key(draft.name));
       const target = sectionName(draft.section_id);
       if (match?.amount_minor != null) return `${match.name} already has an amount for ${month}, so this proposal can't be accepted. Change the amount on the sheet, or reject this proposal.`;
       if (match) return `Accepting fills the blank ${match.name} item in ${target}, adding ${money(draft.amount_minor)} to ${total} for ${month}.`;
-      return `Accepting adds ${draft.name} to ${target} with ${money(draft.amount_minor)}, adding to ${total} for ${month}.`;
+      return `Accepting adds ${draft.name} to ${target} with ${money(draft.amount_minor)}, adding to ${total} for ${month}. If ${draft.name} is a former name of an item on the sheet, that item is filled instead, or acceptance is refused if it already has an amount.`;
     }
     const delta = BigInt(draft.amount_minor) - BigInt(draft.amendment.base_amount_minor);
     const change = delta === 0n ? `${total} stays the same` : `${total} ${delta > 0n ? 'goes up' : 'goes down'} by ${money((delta < 0n ? -delta : delta).toString())}`;

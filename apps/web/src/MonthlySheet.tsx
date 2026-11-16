@@ -467,6 +467,8 @@ function AddItem({ section, sheet, api, signedIn, perform, locked, feedback, clo
   const suggestions = useQuery({ queryKey: ['monthly-suggestions', sheet.month, section.id, name, sheet.version], queryFn: () => api.get<'MonthlyItemSuggestions'>(`/monthly-item-suggestions?month=${sheet.month}&section_id=${section.id}&q=${encodeURIComponent(name)}`), enabled: signedIn && showSuggestions && !selected && !locked });
   // Before anything is typed, offer only names that can actually be added again.
   const matches = showSuggestions && !selected ? (suggestions.data?.items ?? []).filter(item => name.trim() || !item.current_month_item_id) : [];
+  // The list scrolls, so keep the keyboard selection in view.
+  useEffect(() => { if (active >= 0) document.getElementById(`${id}-option-${active}`)?.scrollIntoView?.({ block: 'nearest' }); }, [active]);
   const select = (item: S['MonthlyItemSuggestion']) => {
     if (item.current_month_item_id) { close(); focusItem(item.current_month_item_id); return; }
     setSelected(item); setName(item.name); setRepeat(item.repeat_monthly); setSuggestUsual(item.usual_amount_minor != null); setPreferenceEdited(false); setUsualEdited(false); setActive(-1); setShowSuggestions(false);

@@ -39,6 +39,23 @@ test('history suggestions retain typed amount and saved preferences, support key
   expect(reused).toMatchObject({ amount_minor: '92500', repeat_monthly: true, usual_amount_minor: '90000', section_id: sectionIds.otherOut });
 });
 
+test('keyboard selection keeps the active suggestion in view when the list scrolls', async ({ page, backend }) => {
+  for (let index = 1; index <= 10; index++) await backend.add(`Parking ${index}`, '1000', sectionIds.otherOut, {}, '2026-09');
+  await signIn(page);
+  const section = page.getByRole('region', { name: 'Other money out', exact: true });
+  await section.getByRole('button', { name: 'Add item to Other money out' }).click();
+  const name = section.getByRole('form').getByRole('combobox', { name: 'Name' }); await name.fill('parking');
+  const options = section.getByRole('option');
+  await expect(options).toHaveCount(10);
+  await expect(options.last()).not.toBeInViewport();
+  await name.press('ArrowUp'); await name.press('ArrowDown');
+  await expect(options.last()).toHaveAttribute('aria-selected', 'true');
+  await expect(options.last()).toBeInViewport();
+  await name.press('ArrowDown');
+  await expect(options.first()).toHaveAttribute('aria-selected', 'true');
+  await expect(options.first()).toBeInViewport();
+});
+
 test('suggestions can be dismissed while free typing a new card with recurrence off', async ({ page, backend }) => {
   await backend.add('Travel card', '10000', sectionIds.cards, {}, '2026-09');
   await signIn(page);
