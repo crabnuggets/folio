@@ -30,9 +30,9 @@ func NewPostgres(ctx context.Context, url string) (*Postgres, error) {
 		return nil, unavailable()
 	}
 	p := &Postgres{pool}
-	if err = p.Ping(ctx); err != nil {
+	if err = pool.Ping(ctx); err != nil {
 		pool.Close()
-		return nil, err
+		return nil, unavailable()
 	}
 	tx, err := pool.Begin(ctx)
 	if err != nil {
@@ -180,9 +180,10 @@ func (p *Postgres) Execute(ctx context.Context, owner, key, hash string, fn func
 	return result, false, nil
 }
 
-// Ping checks database connectivity, converting failures to DEPENDENCY_UNAVAILABLE.
+// Ping reads migration metadata to check database readiness without loading owner data.
 func (p *Postgres) Ping(ctx context.Context) error {
-	if p.pool.Ping(ctx) != nil {
+	var version int64
+	if p.pool.QueryRow(ctx, "SELECT version FROM folio.schema_migrations LIMIT 1").Scan(&version) != nil {
 		return unavailable()
 	}
 	return nil
