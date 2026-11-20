@@ -89,10 +89,14 @@ Custom sections have amount_label `Amount`. Renaming retains direction and label
     "id":"UUID","name":"Credit cards","direction":"out","amount_label":"Bill amount",
     "total_minor":"0","missing_count":1,
     "items":[{"id":"UUID","name":"Card name","section_id":"UUID","amount_minor":null,
-      "note":"","repeat_monthly":true,"usual_amount_minor":null}]
+      "note":"","repeat_monthly":true,"usual_amount_minor":null,
+      "recurrence_since":"2026-10"}]
   }]
 }
 ```
+
+`recurrence_since` is the month the item's current recurrence settings
+(`repeat_monthly`, `usual_amount_minor` and section) started, or null.
 
 Schemas are `MonthlySheet`, `MonthlySection`, `MonthlyItem`,
 `MonthlyItemSuggestion`, `MonthlyItemSuggestions` plus the inputs named above.
@@ -113,6 +117,13 @@ Usual amounts are suggestions only; changing them never overwrites entered cells
 Stopping removes only future untouched blank generated rows. User-entered future
 amounts and notes survive. Removing one month creates a persistent skip. Resuming
 starts a new effective period without backfilling stopped months.
+
+An accepted recurring item change applies one item's complete settings from its
+month onward the same way. In that month the item's row moves to the new section,
+and an untouched blank generated row is removed when the item stops repeating.
+The MCP `read_monthly_sheet` tool lists items that recur into a month before it is
+opened, as blank items, without storing rows. `GET /monthly-sheets/{month}` does
+not; `open` stores them.
 
 Suggested section UUIDs and order are stable:
 

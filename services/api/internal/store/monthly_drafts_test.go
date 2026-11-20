@@ -14,7 +14,7 @@ func checkMonthlyDraftStore(t *testing.T, db Store) (string, string, string, Res
 	t.Helper()
 	ctx := context.Background()
 	owner := domain.NewID()
-	input := domain.MonthlyDraftInput{Month: "2026-11", SectionID: "00000000-0000-4000-8000-000000000004", Name: "Persisted proposal", AmountMinor: 1250, SourceID: "test:store", ExternalID: "one", SheetVersion: 1}
+	input := domain.MonthlyDraftInput{Month: "2026-11", SectionID: "00000000-0000-4000-8000-000000000004", Name: "Persisted proposal", AmountMinor: money(1250), SourceID: "test:store", ExternalID: "one", SheetVersion: 1}
 	var wg sync.WaitGroup
 	for range 12 {
 		wg.Go(func() {
@@ -178,7 +178,7 @@ func TestPostgresRetiredAggregateFieldsSurviveMonthlyWrite(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, _, err = db.Execute(ctx, owner, domain.NewID(), "new-proposal", func(st *domain.State) (Result, error) {
-		d, _, err := st.CreateMonthlyDraft(domain.MonthlyDraftInput{Month: "2026-11", SectionID: "00000000-0000-4000-8000-000000000004", Name: "New card", AmountMinor: 100, SourceID: "test", ExternalID: "one", SheetVersion: st.MonthlySheet.Version})
+		d, _, err := st.CreateMonthlyDraft(domain.MonthlyDraftInput{Month: "2026-11", SectionID: "00000000-0000-4000-8000-000000000004", Name: "New card", AmountMinor: money(100), SourceID: "test", ExternalID: "one", SheetVersion: st.MonthlySheet.Version})
 		if err != nil {
 			return Result{}, err
 		}
@@ -203,3 +203,5 @@ func TestPostgresRetiredAggregateFieldsSurviveMonthlyWrite(t *testing.T) {
 		t.Fatal("retired data was deleted on write")
 	}
 }
+
+func money(n domain.Money) *domain.Money { return &n }

@@ -21,9 +21,13 @@ The monthly sheet's entered incoming amounts minus its entered outgoing amounts,
 
 **Monthly recurring item**:
 An item whose name appears in subsequent monthly sheets until the user stops it. Recurrence alone does not establish a monthly amount or confirm receipt or payment.
+_Avoid_: Recurring transaction.
 
 **Usual amount**:
 An optional amount suggested for a recurring item. It contributes to a monthly sheet only when the user enters or applies it.
+
+**Recurring item change**:
+A draft that changes whether an item repeats, its usual amount, or its section from a given month onward.
 
 ## Financial terms
 
@@ -43,7 +47,6 @@ An optional amount suggested for a recurring item. It contributes to a monthly s
 | Draft | Proposed record requiring validation and, initially, user confirmation before it affects totals. |
 | Amendment | Draft that changes the amount or explanations of an item that already has a monthly amount. Refused on acceptance if that amount or those explanations changed after it was proposed. |
 | Posting | Confirmed financial record that participates in deterministic summaries. |
-| Recurrence | Template generating expected items, never evidence that income arrived or a bill was paid. |
 | Evidence | Source metadata supporting a draft, such as an email message ID or a statement page reference. |
 | Balance snapshot | User-entered or imported account balance at a stated time. Not reconstructed from incomplete transaction tracking. |
 | Coverage | Which expected income, bills, and allocations have been confirmed for a month. |

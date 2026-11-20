@@ -138,13 +138,21 @@ func TestMCPAuthenticatedStreamableToolsAndUIAcceptance(t *testing.T) {
 	}
 	defer session.Close()
 	tools, err := session.ListTools(ctx, nil)
-	if err != nil || len(tools.Tools) != 4 {
+	if err != nil || len(tools.Tools) != 5 {
 		t.Fatalf("tools: %+v %v", tools, err)
 	}
+	required := map[string]string{}
 	for _, tool := range tools.Tools {
 		if strings.Contains(tool.Name, "accept") || strings.Contains(tool.Name, "reject") {
 			t.Fatal("MCP exposes review commands")
 		}
+		schema, _ := json.Marshal(tool.InputSchema)
+		var parsed struct{ Required []string }
+		_ = json.Unmarshal(schema, &parsed)
+		required[tool.Name] = strings.Join(parsed.Required, ",")
+	}
+	if required["create_monthly_item_draft"] != "month,section_id,name,note,evidence,source_id,external_id,sheet_version" || required["propose_recurring_item_change"] != "month,item_id,section_id,repeat_monthly,note,sheet_version" {
+		t.Fatalf("tool inputs: %v", required)
 	}
 	call := func(name string, args map[string]any) map[string]any {
 		t.Helper()
@@ -250,6 +258,74 @@ func TestMCPAuthenticatedStreamableToolsAndUIAcceptance(t *testing.T) {
 	entered, _ = state.GetMonthlySheet("2026-11")
 	if entered.MoneyOutMinor != 1250 || state.MonthlySheet.Rows["2026-11"][itemID].Explanations[1].Name != "Cafe" {
 		t.Fatal("amendment did not add the explanation")
+	}
+	// A monthly recurring item: added blank, visible in unopened months, then changed.
+	const recurringSection = "00000000-0000-4000-8000-000000000003"
+	sheet = call("read_monthly_sheet", map[string]any{"month": "2026-11"})
+	recurring := call("create_monthly_item_draft", map[string]any{"month": "2026-11", "section_id": recurringSection, "name": "MCP streaming", "note": "Asked in chat", "evidence": "", "source_id": "chat", "external_id": "mcp-streaming-2026-11", "sheet_version": sheet["version"], "repeat_monthly": true, "usual_amount_minor": "1598"})
+	recurringDraft := recurring["draft"].(map[string]any)
+	if recurringDraft["amount_minor"] != nil || recurringDraft["repeat_monthly"] != true || recurringDraft["usual_amount_minor"] != "1598" {
+		t.Fatalf("recurring item not proposed blank: %v", recurring)
+	}
+	listed = request("GET", "/api/v1/monthly-drafts?month=2026-11", uiToken, "", "")
+	body, _ = io.ReadAll(listed.Body)
+	assertSchema(t, "MonthlyDraftPage", body)
+	edited := request("PUT", "/api/v1/monthly-drafts/"+recurringDraft["id"].(string), uiToken, fmt.Sprintf(`{"section_id":%q,"name":"MCP streaming","amount_minor":null,"note":"Owner checked"}`, recurringSection), `"1"`)
+	if body, _ = io.ReadAll(edited.Body); edited.StatusCode != 200 {
+		t.Fatalf("blank recurring draft edit %d: %s", edited.StatusCode, body)
+	}
+	accepted = request("POST", "/api/v1/monthly-drafts/"+recurringDraft["id"].(string)+"/accept", uiToken, fmt.Sprintf(`{"sheet_version":%v}`, sheet["version"]), `"2"`)
+	if body, _ = io.ReadAll(accepted.Body); accepted.StatusCode != 200 {
+		t.Fatalf("recurring accept %d: %s", accepted.StatusCode, body)
+	}
+	findItem := func(sheet map[string]any, name string) map[string]any {
+		for _, section := range sheet["sections"].([]any) {
+			for _, item := range section.(map[string]any)["items"].([]any) {
+				if item.(map[string]any)["name"] == name {
+					return item.(map[string]any)
+				}
+			}
+		}
+		return nil
+	}
+	future := call("read_monthly_sheet", map[string]any{"month": "2027-02"})
+	streaming := findItem(future, "MCP streaming")
+	if streaming == nil || streaming["amount_minor"] != nil || streaming["repeat_monthly"] != true || streaming["usual_amount_minor"] != "1598" || streaming["recurrence_since"] != "2026-11" || findItem(future, "MCP card") != nil {
+		t.Fatalf("unopened month does not show the recurring item: %v", future)
+	}
+	state, _ = db.Read(ctx, ownerID)
+	if _, opened := state.MonthlySheet.Rows["2027-02"]; opened {
+		t.Fatal("reading an unopened month stored it")
+	}
+	changeArgs := map[string]any{"month": "2027-01", "item_id": streaming["id"], "section_id": recurringSection, "repeat_monthly": true, "usual_amount_minor": "1798", "note": "Price rise", "sheet_version": future["version"]}
+	changed := call("propose_recurring_item_change", changeArgs)
+	change := changed["draft"].(map[string]any)
+	if base := change["recurrence_change"].(map[string]any); changed["outcome"] != "created" || base["base_usual_amount_minor"] != "1598" || change["amount_minor"] != nil {
+		t.Fatalf("recurring item change not staged: %v", changed)
+	}
+	if again := call("propose_recurring_item_change", changeArgs); again["outcome"] != "already_proposed" || again["draft"].(map[string]any)["id"] != change["id"] {
+		t.Fatalf("same change not deduplicated: %v", again)
+	}
+	changeArgs["usual_amount_minor"] = "1898"
+	if conflict, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "propose_recurring_item_change", Arguments: changeArgs}); err != nil || !conflict.IsError || !strings.Contains(conflict.Content[0].(*mcp.TextContent).Text, change["id"].(string)) {
+		t.Fatalf("pending conflict does not name the proposal: %+v %v", conflict, err)
+	}
+	if pending := call("list_pending_monthly_drafts", map[string]any{"month": "2027-01"}); len(pending["items"].([]any)) != 1 {
+		t.Fatal("recurring item change not listed as pending")
+	}
+	listed = request("GET", "/api/v1/monthly-drafts?month=2027-01", uiToken, "", "")
+	body, _ = io.ReadAll(listed.Body)
+	assertSchema(t, "MonthlyDraftPage", body)
+	accepted = request("POST", "/api/v1/monthly-drafts/"+change["id"].(string)+"/accept", uiToken, fmt.Sprintf(`{"sheet_version":%v}`, future["version"]), `"1"`)
+	if body, _ = io.ReadAll(accepted.Body); accepted.StatusCode != 200 {
+		t.Fatalf("recurring item change accept %d: %s", accepted.StatusCode, body)
+	}
+	assertSchema(t, "MonthlySheet", body)
+	if december := findItem(call("read_monthly_sheet", map[string]any{"month": "2026-12"}), "MCP streaming"); december["usual_amount_minor"] != "1598" {
+		t.Fatal("change reached an earlier month")
+	}
+	if february := findItem(call("read_monthly_sheet", map[string]any{"month": "2027-02"}), "MCP streaming"); february["usual_amount_minor"] != "1798" || february["recurrence_since"] != "2027-01" {
+		t.Fatalf("change missing from later months: %v", february)
 	}
 	for _, path := range []string{"/accounts", "/entries", "/statements", "/drafts", "/months/2026-11/summary", "/legacy-month-summaries", "/imports"} {
 		if resp := request("GET", "/api/v1"+path, uiToken, "", ""); resp.StatusCode != 404 {
