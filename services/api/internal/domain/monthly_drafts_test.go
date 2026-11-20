@@ -8,7 +8,7 @@ import (
 )
 
 func proposal(s *State, external string) MonthlyDraftInput {
-	return MonthlyDraftInput{Month: "2026-11", SectionID: monthlyCards, Name: "Sample card", AmountMinor: 1250, Note: "November bill", Evidence: "Synthetic statement page 1", SourceID: "test:statement", ExternalID: external, SheetVersion: s.MonthlySheet.Version}
+	return MonthlyDraftInput{Month: "2026-11", SectionID: monthlyCards, Name: "Sample card", AmountMinor: monthlyAmount(1250), Note: "November bill", Evidence: "Synthetic statement page 1", SourceID: "test:statement", ExternalID: external, SheetVersion: s.MonthlySheet.Version}
 }
 func TestMonthlyDraftReviewBoundaryRetryAndUndo(t *testing.T) {
 	s := NewState()
@@ -20,7 +20,7 @@ func TestMonthlyDraftReviewBoundaryRetryAndUndo(t *testing.T) {
 	if sheet.MoneyOutMinor != 0 || sheet.Version != 1 || len(s.MonthlySheet.Items) != 0 {
 		t.Fatal("staging changed the sheet")
 	}
-	edited, err := s.EditMonthlyDraft(d.ID, MonthlyDraftEdit{SectionID: monthlyRecurring, Name: "Edited item", AmountMinor: 2000, Note: "Owner correction"}, d.Version)
+	edited, err := s.EditMonthlyDraft(d.ID, MonthlyDraftEdit{SectionID: monthlyRecurring, Name: "Edited item", AmountMinor: monthlyAmount(2000), Note: "Owner correction"}, d.Version)
 	monthlyCheck(t, err)
 	retry, _, err := s.CreateMonthlyDraft(in)
 	monthlyCheck(t, err)
@@ -28,7 +28,7 @@ func TestMonthlyDraftReviewBoundaryRetryAndUndo(t *testing.T) {
 		t.Fatal("source retry lost owner edits")
 	}
 	changed := in
-	changed.AmountMinor++
+	changed.AmountMinor = monthlyAmount(1251)
 	_, _, err = s.CreateMonthlyDraft(changed)
 	aeErrorCode(t, err, "SOURCE_CONFLICT")
 	_, err = s.AcceptMonthlyDraft(d.ID, d.Version, 1)
@@ -99,7 +99,7 @@ func TestMonthlyDraftFillsRecurringBlankAndRejectsEnteredDuplicate(t *testing.T)
 func TestMonthlyDraftValidation(t *testing.T) {
 	for _, mutate := range []func(*MonthlyDraftInput){
 		func(in *MonthlyDraftInput) { in.Month = "2026-13" }, func(in *MonthlyDraftInput) { in.SectionID = NewID() },
-		func(in *MonthlyDraftInput) { in.AmountMinor = -1 }, func(in *MonthlyDraftInput) { in.Name = "  " }, func(in *MonthlyDraftInput) { in.ExternalID = "" },
+		func(in *MonthlyDraftInput) { in.AmountMinor = monthlyAmount(-1) }, func(in *MonthlyDraftInput) { in.Name = "  " }, func(in *MonthlyDraftInput) { in.ExternalID = "" },
 	} {
 		s := NewState()
 		in := proposal(s, "one")
@@ -165,7 +165,7 @@ func TestMonthlyDraftExplanationsCarryToAcceptedRow(t *testing.T) {
 	income.SectionID, income.Explanations = monthlyIncome, []MonthlyExplanation{{Name: "Bonus", AmountMinor: 1}}
 	_, _, err = s.CreateMonthlyDraft(income)
 	aeErrorCode(t, err, "VALIDATION_FAILED")
-	_, err = s.EditMonthlyDraft(d.ID, MonthlyDraftEdit{SectionID: d.SectionID, Name: d.Name, AmountMinor: 900, Note: d.Note}, d.Version)
+	_, err = s.EditMonthlyDraft(d.ID, MonthlyDraftEdit{SectionID: d.SectionID, Name: d.Name, AmountMinor: monthlyAmount(900), Note: d.Note}, d.Version)
 	aeErrorCode(t, err, "VALIDATION_FAILED")
 	sheet, err := s.AcceptMonthlyDraft(d.ID, d.Version, s.MonthlySheet.Version)
 	monthlyCheck(t, err)
@@ -212,7 +212,7 @@ func TestMonthlyDraftIdentityIgnoresWordingAndNamesTheExistingProposal(t *testin
 		t.Fatal("a reviewed source did not report its state")
 	}
 	changed := in
-	changed.AmountMinor = 1300
+	changed.AmountMinor = monthlyAmount(1300)
 	_, _, err = s.CreateMonthlyDraft(changed)
 	aeErrorCode(t, err, "SOURCE_CONFLICT")
 	if !strings.Contains(err.Error(), d.ID) || !strings.Contains(err.Error(), "rejected") || !strings.Contains(err.Error(), "1250") {
@@ -265,7 +265,7 @@ func TestMonthlyAmendmentRefusals(t *testing.T) {
 	_, _, err = s.CreateMonthlyAmendment(proposal(s, "missing"), NewID())
 	aeErrorCode(t, err, "NOT_FOUND")
 	in := proposal(s, "late")
-	in.AmountMinor = 1300
+	in.AmountMinor = monthlyAmount(1300)
 	d, _, err := s.CreateMonthlyAmendment(in, id)
 	monthlyCheck(t, err)
 	_, err = s.UpdateMonthlyItem("2026-11", id, MonthlyItemUpdate{SectionID: monthlyCards, Name: "Sample card", AmountMinor: monthlyAmount(1400)}, s.MonthlySheet.Version)

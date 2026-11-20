@@ -450,6 +450,8 @@ export interface components {
             note: string;
             repeat_monthly: boolean;
             usual_amount_minor: components["schemas"]["Money"] | null;
+            /** @description Month the item's current recurrence settings (repeat_monthly, usual_amount_minor and section) started. */
+            recurrence_since: components["schemas"]["MonthValue"] | null;
             explanations?: components["schemas"]["MonthlyExplanation"][];
             /** @description Remaining amount, present only when explanations exist and their sum is less than the parent amount. */
             unexplained_minor?: components["schemas"]["Money"];
@@ -575,7 +577,8 @@ export interface components {
             month: components["schemas"]["MonthValue"];
             section_id: components["schemas"]["UUID"];
             name: string;
-            amount_minor: components["schemas"]["Money"];
+            /** @description Proposed amount for the month. Blank only for a monthly recurring item proposed without one, and for a recurring item change. */
+            amount_minor: components["schemas"]["Money"] | null;
             note: string;
             evidence: string;
             source_id: string;
@@ -584,12 +587,23 @@ export interface components {
             sheet_version: number;
             /** @description Breakdown of a money-out proposal, copied to the item when accepted. The sum cannot exceed amount_minor. */
             explanations: components["schemas"]["MonthlyExplanation"][];
+            /** @description Makes a new item a monthly recurring item from month. For a recurring item change, whether the item repeats after the change. */
+            repeat_monthly: boolean;
+            /** @description Usual amount suggested for the recurring item. Requires repeat_monthly. */
+            usual_amount_minor: components["schemas"]["Money"] | null;
         };
         /** @description The entered amount and explanations an amendment was proposed against. Acceptance replaces them and is refused once they differ. */
         MonthlyAmendment: {
             item_id: components["schemas"]["UUID"];
             base_amount_minor: components["schemas"]["Money"];
             base_explanations: components["schemas"]["MonthlyExplanation"][];
+        };
+        /** @description The recurrence settings a recurring item change was proposed against. The proposal's section_id, repeat_monthly and usual_amount_minor hold the settings from its month onward. Acceptance is refused once the base settings differ. */
+        MonthlyRecurrenceChange: {
+            item_id: components["schemas"]["UUID"];
+            base_section_id: components["schemas"]["UUID"];
+            base_repeat_monthly: boolean;
+            base_usual_amount_minor: components["schemas"]["Money"] | null;
         };
         MonthlyDraft: {
             id: components["schemas"]["UUID"];
@@ -602,7 +616,8 @@ export interface components {
             month: components["schemas"]["MonthValue"];
             section_id: components["schemas"]["UUID"];
             name: string;
-            amount_minor: components["schemas"]["Money"];
+            /** @description Proposed amount for the month. Blank only for a monthly recurring item proposed without one, and for a recurring item change. */
+            amount_minor: components["schemas"]["Money"] | null;
             note: string;
             evidence: string;
             source_id: string;
@@ -611,7 +626,12 @@ export interface components {
             sheet_version: number;
             /** @description Breakdown of a money-out proposal, copied to the item when accepted. The sum cannot exceed amount_minor. */
             explanations: components["schemas"]["MonthlyExplanation"][];
+            /** @description Makes a new item a monthly recurring item from month. For a recurring item change, whether the item repeats after the change. */
+            repeat_monthly: boolean;
+            /** @description Usual amount suggested for the recurring item. Requires repeat_monthly. */
+            usual_amount_minor: components["schemas"]["Money"] | null;
             amendment: components["schemas"]["MonthlyAmendment"] | null;
+            recurrence_change: components["schemas"]["MonthlyRecurrenceChange"] | null;
             /** @enum {string} */
             state: "pending" | "accepted" | "rejected";
             accepted_item_id: components["schemas"]["UUID"] | null;
@@ -620,7 +640,8 @@ export interface components {
         MonthlyDraftEdit: {
             section_id: components["schemas"]["UUID"];
             name: string;
-            amount_minor: components["schemas"]["Money"];
+            /** @description Proposed amount for the month. Blank only for a monthly recurring item proposed without one, and for a recurring item change. */
+            amount_minor: components["schemas"]["Money"] | null;
             note: string;
             /** @description Replaces the proposal's breakdown when supplied. An empty array removes it. Omit to keep it. */
             explanations?: components["schemas"]["MonthlyExplanation"][];

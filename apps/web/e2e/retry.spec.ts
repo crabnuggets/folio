@@ -24,7 +24,7 @@ test('lost committed add retries the same command across renewed sign-in', async
 test('stale row edits compare latest before a fresh explicit save', async ({ page, backend }) => {
   await backend.add('Salary', '640000'); await signIn(page);
   const sheet = await backend.get<'MonthlySheet'>(`/monthly-sheets/${month}`); const item = sheet.sections.flatMap(section => section.items)[0];
-  const { id: _id, ...input } = item;
+  const { id: _id, recurrence_since: _since, ...input } = item;
   await backend.post<'MonthlySheet'>(`/monthly-sheets/${month}/items/${item.id}`, { ...input, amount_minor: '650000', note: 'Concurrent saved note' }, { method: 'PUT', version: sheet.version });
   const field = page.getByLabel('Amount for Salary', { exact: true }); await field.fill('6600'); await field.press('Tab');
   await expect(page.getByRole('button', { name: 'Compare latest' })).toBeVisible(); await expect(field).toHaveValue('6600');

@@ -165,13 +165,37 @@ func (s *State) GetMonthlySheet(month string) (MonthlySheet, error) {
 	if !ValidMonth(month) {
 		return MonthlySheet{}, Invalid("Invalid monthly sheet month")
 	}
+	return s.monthlySheetView(month, s.MonthlySheet.Rows[month])
+}
+
+// PreviewMonthlySheet shows the month as opening it would: items that recur into
+// it appear blank even before it is opened. Nothing is stored.
+func (s *State) PreviewMonthlySheet(month string) (MonthlySheet, error) {
+	if !ValidMonth(month) {
+		return MonthlySheet{}, Invalid("Invalid monthly sheet month")
+	}
+	rows := map[string]MonthlyStoredRow{}
+	for id, row := range s.MonthlySheet.Rows[month] {
+		rows[id] = row
+	}
+	for id, item := range s.MonthlySheet.Items {
+		if p := item.preference(month); p.RepeatMonthly {
+			if _, exists := rows[id]; !exists {
+				rows[id] = MonthlyStoredRow{ItemID: id, SectionID: p.SectionID, Generated: true}
+			}
+		}
+	}
+	return s.monthlySheetView(month, rows)
+}
+
+func (s *State) monthlySheetView(month string, rows map[string]MonthlyStoredRow) (MonthlySheet, error) {
 	result := MonthlySheet{Month: month, Version: s.MonthlySheet.Version, Currency: s.Settings.Currency, CurrencyExponent: s.Settings.CurrencyExponent, Sections: []MonthlySection{}}
 	result.CurrencyLocked = s.currencyLocked()
 	var incoming, outgoing summarySum
 	for _, section := range s.MonthlySheet.Sections {
 		view := MonthlySection{MonthlySectionDefinition: section, Items: []MonthlyItem{}}
 		var total summarySum
-		for id, row := range s.MonthlySheet.Rows[month] {
+		for id, row := range rows {
 			if row.Removed || row.SectionID != section.ID {
 				continue
 			}
@@ -181,7 +205,11 @@ func (s *State) GetMonthlySheet(month string) (MonthlySheet, error) {
 			if err != nil {
 				return MonthlySheet{}, err
 			}
-			view.Items = append(view.Items, MonthlyItem{ID: id, Name: item.Name, SectionID: row.SectionID, AmountMinor: row.AmountMinor, Note: row.Note, RepeatMonthly: p.RepeatMonthly, UsualAmountMinor: p.UsualAmountMinor, Explanations: row.Explanations, UnexplainedMinor: unexplained})
+			var since *string
+			if p.Month != "" {
+				since = &p.Month
+			}
+			view.Items = append(view.Items, MonthlyItem{ID: id, Name: item.Name, SectionID: row.SectionID, AmountMinor: row.AmountMinor, Note: row.Note, RepeatMonthly: p.RepeatMonthly, UsualAmountMinor: p.UsualAmountMinor, RecurrenceSince: since, Explanations: row.Explanations, UnexplainedMinor: unexplained})
 			if row.AmountMinor == nil {
 				view.MissingCount++
 			} else {
@@ -357,6 +385,44 @@ func (s *State) UpdateMonthlyItem(month, id string, in MonthlyItemUpdate, expect
 	row.SectionID, row.AmountMinor, row.Note, row.Touched = section.ID, in.AmountMinor, in.Note, true
 	s.MonthlySheet.Rows[month][id] = row
 	if in.AmountMinor != nil || in.UsualAmountMinor != nil {
+		s.MonthlySheet.CurrencyLocked = true
+	}
+	return s.monthlyFinish(month, before, true)
+}
+
+// SetMonthlyRecurrence changes an item's recurrence settings from month onward
+// without changing amounts. The item's row in that month moves to the new section,
+// and a blank generated row that stops repeating goes, as in later months.
+func (s *State) SetMonthlyRecurrence(month, id, sectionID string, repeat bool, usual *Money, expected int64) (MonthlySheet, error) {
+	before, err := s.monthlyBefore(month, expected)
+	if err != nil {
+		return MonthlySheet{}, err
+	}
+	item, ok := s.MonthlySheet.Items[id]
+	if !ok {
+		return MonthlySheet{}, NotFound()
+	}
+	section, err := s.monthlySection(sectionID)
+	if err != nil {
+		return MonthlySheet{}, err
+	}
+	if section.Direction != item.Direction {
+		return MonthlySheet{}, Invalid("An item's direction cannot change")
+	}
+	if err := monthlyText(item.Name, "", nil, usual, repeat); err != nil {
+		return MonthlySheet{}, err
+	}
+	s.setMonthlyPreference(&item, month, section.ID, repeat, usual)
+	s.MonthlySheet.Items[id] = item
+	if row, ok := s.MonthlySheet.Rows[month][id]; ok && !row.Removed {
+		if !repeat && row.Generated && !row.Touched && row.AmountMinor == nil && row.Note == "" {
+			delete(s.MonthlySheet.Rows[month], id)
+		} else {
+			row.SectionID = section.ID
+			s.MonthlySheet.Rows[month][id] = row
+		}
+	}
+	if usual != nil {
 		s.MonthlySheet.CurrencyLocked = true
 	}
 	return s.monthlyFinish(month, before, true)

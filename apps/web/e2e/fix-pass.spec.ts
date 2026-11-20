@@ -88,7 +88,7 @@ for (const changed of ['removed', 'relocated'] as const) test(`compare retains $
   await otherRow.getByLabel('Notes', { exact: true }).fill('Other unsaved draft');
   let latest = await backend.get<'MonthlySheet'>(`/monthly-sheets/${month}`);
   for (const name of ['Salary', 'Refund']) {
-    const item = latest.sections.flatMap(section => section.items).find(item => item.name === name)!; const { id, ...input } = item;
+    const item = latest.sections.flatMap(section => section.items).find(item => item.name === name)!; const { id, recurrence_since: _since, ...input } = item;
     latest = await backend.post<'MonthlySheet'>(`/monthly-sheets/${month}/items/${id}`, { ...input, note: 'Concurrent note', section_id: changed === 'relocated' ? (item.section_id === sectionIds.income ? sectionIds.otherIn : sectionIds.income) : item.section_id }, { method: 'PUT', version: latest.version });
     if (changed === 'removed') latest = await backend.post<'MonthlySheet'>(`/monthly-sheets/${month}/items/${id}/remove`, {}, { version: latest.version });
   }
@@ -123,7 +123,7 @@ test('SGD is fixed before amounts and in empty later months with separate month 
 for (const changed of ['removed', 'relocated'] as const) for (const action of ['discard', 'reapply'] as const) test(`compare retains ${changed} row and other drafts for explicit ${action}`, async ({ page, context, backend }) => {
   await backend.add('Salary', '10000'); await backend.add('Refund', '2000', sectionIds.otherIn); await signIn(page);
   const other = await context.newPage(); await signIn(other);
-  const old = await backend.get<'MonthlySheet'>(`/monthly-sheets/${month}`); const item = old.sections[0].items[0]; const { id, ...input } = item;
+  const old = await backend.get<'MonthlySheet'>(`/monthly-sheets/${month}`); const item = old.sections[0].items[0]; const { id, recurrence_since: _since, ...input } = item;
   await other.request.put(`/api/v1/monthly-sheets/${month}/items/${id}`, { headers: { Authorization: `Bearer ${bearer}`, 'Idempotency-Key': randomUUID(), 'If-Match': `"${old.version}"` }, data: { ...input, note: 'Concurrent note', section_id: changed === 'relocated' ? sectionIds.otherIn : item.section_id } }).then(response => expect(response.status()).toBe(200));
   if (changed === 'removed') { await other.reload(); await signIn(other); await other.getByRole('button', { name: 'Salary', exact: true }).click(); await other.getByRole('button', { name: 'Skip this month', exact: true }).click(); await expect(other.getByLabel('Amount for Salary', { exact: true })).toHaveCount(0); }
   const salary = page.getByLabel('Amount for Salary', { exact: true }); const refund = page.getByLabel('Amount for Refund', { exact: true });

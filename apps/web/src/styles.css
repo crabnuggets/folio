@@ -337,10 +337,17 @@ dialog::backdrop { background:var(--scrim); }
 .draft-edit form { padding:4px 0 8px; }
 .draft-undo { margin-top:8px; }
 .draft-compare { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:10px; }
-.draft-compare section { padding:12px 14px; border:1px solid var(--border); border-radius:var(--radius-sm); }
+.draft-compare section { min-width:0; padding:12px 14px; border:1px solid var(--border); border-radius:var(--radius-sm); }
 .draft-compare section:last-child { border-color:var(--accent); background:var(--accent-subtle); }
 .draft-compare h3 { margin:0 0 2px; color:var(--secondary); font-size:.8125rem; font-weight:500; }
 .draft-compare .money { font-size:1.25rem; font-weight:600; letter-spacing:-.01em; font-variant-numeric:tabular-nums; }
+.draft-blank { color:var(--secondary); font-weight:500; }
+.draft-repeat { margin-top:4px; color:var(--secondary); font-size:.875rem; }
+.draft-note { margin:-4px 0 16px; font-size:.875rem; overflow-wrap:anywhere; white-space:pre-wrap; }
+.recurrence-settings { margin:6px 0 0; font-size:.875rem; }
+.recurrence-settings>div { display:grid; grid-template-columns:max-content minmax(0,1fr); column-gap:12px; padding:4px 0; }
+.recurrence-settings dt { color:var(--secondary); }
+.recurrence-settings dd { margin:0; font-weight:500; text-align:right; overflow-wrap:anywhere; font-variant-numeric:tabular-nums; }
 
 /* Loading */
 .skeleton { display:block; border-radius:6px; background:var(--muted); animation:skeleton-pulse 1.6s ease-in-out infinite; }

@@ -50,7 +50,8 @@ func validateRequired(body []byte, t reflect.Type) error {
 	}
 	for _, field := range requiredFields[t.Name()] {
 		v, ok := values[field]
-		nullableMonthly := (t.Name() == "MonthlyItemInput" || t.Name() == "MonthlyItemUpdate") && (field == "amount_minor" || field == "usual_amount_minor")
+		nullableMonthly := (t.Name() == "MonthlyItemInput" || t.Name() == "MonthlyItemUpdate") && (field == "amount_minor" || field == "usual_amount_minor") ||
+			t.Name() == "MonthlyDraftEdit" && field == "amount_minor"
 		if !ok || string(v) == "null" && !nullableMonthly {
 			return domain.Fail(400, "MALFORMED_JSON", "Required field is missing or null: "+field)
 		}

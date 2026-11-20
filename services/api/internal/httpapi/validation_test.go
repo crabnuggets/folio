@@ -8,7 +8,6 @@ import (
 func TestMonthlyDraftReviewRequiresCanonicalExplicitMoney(t *testing.T) {
 	for _, body := range []string{
 		`{"section_id":"section","name":"Card","note":""}`,
-		`{"section_id":"section","name":"Card","amount_minor":null,"note":""}`,
 		`{"section_id":"section","name":"Card","amount_minor":0,"note":""}`,
 		`{"section_id":"section","name":"Card","amount_minor":"01","note":""}`,
 		`{"section_id":"section","name":"Card","amount_minor":"9223372036854775808","note":""}`,
@@ -20,6 +19,10 @@ func TestMonthlyDraftReviewRequiresCanonicalExplicitMoney(t *testing.T) {
 	}
 	if _, err := readJSON[domain.MonthlyDraftEdit]([]byte(`{"section_id":"section","name":"Card","amount_minor":"0","note":""}`)); err != nil {
 		t.Fatal("explicit zero must stay valid", err)
+	}
+	// A blank amount is explicit; the domain allows it only for a new recurring item.
+	if _, err := readJSON[domain.MonthlyDraftEdit]([]byte(`{"section_id":"section","name":"Card","amount_minor":null,"note":""}`)); err != nil {
+		t.Fatal("explicit blank must reach the domain", err)
 	}
 	if _, err := readJSON[domain.MonthlyDraftAccept]([]byte(`{}`)); err == nil {
 		t.Fatal("acceptance must include sheet version")

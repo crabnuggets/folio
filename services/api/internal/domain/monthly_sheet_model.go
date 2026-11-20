@@ -91,6 +91,7 @@ type MonthlyItem struct {
 	Note             string               `json:"note"`
 	RepeatMonthly    bool                 `json:"repeat_monthly"`
 	UsualAmountMinor *Money               `json:"usual_amount_minor"`
+	RecurrenceSince  *string              `json:"recurrence_since"`
 	Explanations     []MonthlyExplanation `json:"explanations,omitempty"`
 	UnexplainedMinor *Money               `json:"unexplained_minor,omitempty"`
 }

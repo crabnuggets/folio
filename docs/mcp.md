@@ -1,15 +1,23 @@
 # Folio MCP
 
-Folio exposes four tools over the official Go MCP SDK's stateless Streamable HTTP
+Folio exposes five tools over the official Go MCP SDK's stateless Streamable HTTP
 transport at `https://folio-j4md.onrender.com/mcp`:
 
-- `read_monthly_sheet` reads a month's items (with IDs, amounts and explanations),
-  section IDs, current version, and totals.
+- `read_monthly_sheet` reads a month's items (with IDs, amounts, explanations and
+  recurrence settings), section IDs, current version, and totals. Items that
+  recur into the month appear blank even before the month is opened; the read
+  stores nothing.
 - `list_pending_monthly_drafts` reads pending proposals for one month.
 - `create_monthly_item_draft` persists one pending proposal for a blank or new
-  item, optionally with a breakdown (explanations) for a money-out item.
+  item, optionally with a breakdown (explanations) for a money-out item. With
+  `repeat_monthly` it proposes a new monthly recurring item, optionally with a
+  usual amount, and the amount may be left blank.
 - `propose_monthly_item_amendment` persists one pending proposal to change an item
   that already has an amount: a corrected amount, or explanations that add detail.
+- `propose_recurring_item_change` persists one pending recurring item change: an
+  item's complete recurrence settings (repeats, usual amount, section) from a
+  month onward. It starts or stops repeating, sets or clears the usual amount, or
+  moves the item to another section. It never changes amounts or names.
 
 The intended client is Claude (claude.ai, desktop or mobile) with Folio added as a
 custom connector. You upload a statement, screenshot, or describe amounts in chat;
@@ -21,14 +29,32 @@ access token. MCP cannot accept, reject, edit, or post amounts. The signed-in Fo
 UI shows Pending proposals with review, edit, accept, reject, and refresh actions.
 Accepting a proposal fills a matching blank item or adds a monthly item, and copies
 its breakdown to the item's explanations. It refuses to overwrite an entered amount;
-only an amendment, accepted explicitly, changes one. Recurrence preferences stay intact. Pending and rejected proposals never contribute
-to totals.
+only an amendment, accepted explicitly, changes one. Recurrence settings stay
+intact, except that a proposed monthly recurring item starts repeating from its
+month. Such a proposal is refused when its name is already an item (at proposal
+time, or with `ITEM_EXISTS` on acceptance), because recurrence on an existing item
+is a recurring item change. Pending and rejected proposals never contribute to
+totals.
 
 An amendment records the item's entered amount and explanations when it is
 proposed. Accepting it replaces both and keeps the item's name, section, note and
 recurrence. Acceptance is refused with `ITEM_CHANGED` if either has changed since.
 
-Source namespace plus external identity deduplicates proposals across reconnects,
+A recurring item change records the item's settings for its month when it is
+proposed. Accepting applies the new settings from that month onward, as editing
+the item in that month would: earlier months keep theirs, blank generated rows
+that were never touched follow the change, and entered amounts and notes stay.
+A setting the owner made for a later month still applies from that month.
+Acceptance is refused with `ITEM_CHANGED` if the recorded settings have changed
+since. The owner can accept or reject it, not edit it, and Undo reverses it. See
+[ADR 0009](adr/0009-recurring-item-changes-over-mcp.md).
+
+A recurring item change has no source identity. Each item can have one pending
+recurring item change: the same settings again return `outcome: already_proposed`,
+and different settings fail with `PROPOSAL_PENDING`, naming the pending proposal.
+Once it is accepted or rejected, a new one can be proposed.
+
+For other proposals, source namespace plus external identity deduplicates them across reconnects,
 retries, edits, and review decisions. The match compares what a proposal would
 change (month, item, amount and explanations), not the assistant's note or evidence
 wording, so reading the same document again finds the earlier proposal. The tools
@@ -128,6 +154,9 @@ verified after setup.
    add up to more than the total.
    If the item already has an amount, propose an amendment instead: a corrected
    amount, or the charges as explanations.
+   When I ask for a new recurring item, propose it with repeat_monthly. To change
+   an existing recurring item, propose a recurring item change from the month I
+   name.
    Build source_id from the issuer and document type, and external_id from details
    printed in the document, such as the card's last 4 digits and the statement
    date. Never use the file name.
